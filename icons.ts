@@ -92,7 +92,7 @@ const oneWindingPTRPath = svg`
     stroke="currentColor" stroke-width="1.5" />`;
 
 const twoWindingPTRPath = svg`
-<circle cx="15" cy="10" r="9" fill="none"
+  <circle cx="15" cy="10" r="9" fill="none"
     stroke="currentColor" stroke-width="1.5" />
   <circle cx="15" cy="20" r="9" fill="none"
     stroke="currentColor" stroke-width="1.5" />`;
@@ -104,13 +104,26 @@ const threeWindingPTRPath = svg`<circle cx="15" cy="10" r="9" fill="none"
   <circle cx="20" cy="20" r="9" fill="none"
     stroke="currentColor" stroke-width="1.5" />`;
 
-export const oneWindingPTRIcon = html`<svg
+export const oneWindingAutoPTRIcon = html`<svg
   viewBox="0 0 30 30"
   width="24"
   height="24"
   slot="icon"
 >
-  ${oneWindingPTRPath}
+  <circle
+    cx="15"
+    cy="17.75"
+    r="8"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.5"
+  />
+  <path
+    d="m 15,0 0,2.4 C 20.6,6.8 22.7,10.5 23,17.8"
+    stroke="currentColor"
+    stroke-width="1.5"
+  />
+  <path d="M 15,25.75 V 30" stroke="currentColor" stroke-width="1.5" />
 </svg>`;
 
 export const twoWindingPTRIcon = html`<svg
@@ -122,14 +135,34 @@ export const twoWindingPTRIcon = html`<svg
   ${twoWindingPTRPath}
 </svg>`;
 
-export const twoWindingPTRIconHorizontal = html`<svg
+export const twoWindingAutoPTRIcon = html`<svg
   viewBox="0 0 30 30"
   width="24"
   height="24"
-  transform="rotate(-90)"
   slot="icon"
 >
-  ${twoWindingPTRPath}
+  <circle
+    cx="20.8"
+    cy="17.75"
+    r="8"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.5"
+  />
+  <circle
+    cx="9.5"
+    cy="17.75"
+    r="8"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.5"
+  />
+  <path
+    d="m 20.8,0 v 2.4 c 5.6,4.4 7.7,8.1 8,15.4"
+    stroke="currentColor"
+    stroke-width="1.5"
+  />
+  <path d="M 20.8,25.8 V 30" stroke="currentColor" stroke-width="1.5" />
 </svg>`;
 
 export const threeWindingPTRIcon = html`<svg
@@ -139,6 +172,102 @@ export const threeWindingPTRIcon = html`<svg
   slot="icon"
 >
   ${threeWindingPTRPath}
+</svg>`;
+
+export const oneWindingEarthingPTRIcon = html`<svg
+  viewBox="0 0 30 30"
+  width="24"
+  height="24"
+  slot="icon"
+>
+  <circle
+    cx="15"
+    cy="12.5"
+    r="8"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.5"
+  />
+  <path
+    d="m 11.9,25.4 h 6.1"
+    stroke="currentColor"
+    stroke-width="1.5"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+  />
+  <path
+    d="m 13.4,27.3 h 3.3"
+    stroke="currentColor"
+    stroke-width="1.5"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+  />
+  <path
+    d="m 14.2,29.2 h 1.8"
+    stroke="currentColor"
+    stroke-width="1.5"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+  />
+  <path
+    d="M 15,25.4 V 20.5"
+    stroke="currentColor"
+    stroke-width="1.5"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+  />
+</svg>`;
+
+export const twoWindingEarthingPTRIcon = html`<svg
+  viewBox="0 0 30 30"
+  width="24"
+  height="24"
+  slot="icon"
+>
+  <circle
+    cx="9"
+    cy="15"
+    r="8"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.5"
+  />
+  <circle
+    cx="21.25"
+    cy="15"
+    r="8"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.5"
+  />
+  <path
+    d="m 18.15,25.4 h 6.1"
+    stroke="currentColor"
+    stroke-width="1.5"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+  />
+  <path
+    d="m 19.6,27.3 h 3.3"
+    stroke="currentColor"
+    stroke-width="1.5"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+  />
+  <path
+    d="m 20.35,29.2 h 1.8"
+    stroke="currentColor"
+    stroke-width="1.5"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+  />
+  <path
+    d="m 21.2,25.4 0,-4.9"
+    stroke="currentColor"
+    stroke-width="1.5"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+  />
 </svg>`;
 
 export const oneWindingPTRGraphic = html`<svg

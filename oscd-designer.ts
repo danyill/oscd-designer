@@ -15,10 +15,12 @@ import './sld-editor.js';
 import {
   bayIcon,
   equipmentIcon,
-  oneWindingPTRIcon,
+  oneWindingAutoPTRIcon,
   threeWindingPTRIcon,
   twoWindingPTRIcon,
-  twoWindingPTRIconHorizontal,
+  twoWindingAutoPTRIcon,
+  oneWindingEarthingPTRIcon,
+  twoWindingEarthingPTRIcon,
   voltageLevelIcon,
 } from './icons.js';
 import {
@@ -756,7 +758,7 @@ export default class Designer extends LitElement {
                   this.startPlacing(element);
                 }}
                 style="--mdc-theme-secondary: #F5E214; --mdc-theme-on-secondary: rgb(0, 0, 0 / 0.83);"
-                >${oneWindingPTRIcon}</mwc-fab
+                >${oneWindingAutoPTRIcon}</mwc-fab
               ><mwc-fab
                 mini
                 label="Add Two Winding Auto Transformer"
@@ -778,7 +780,7 @@ export default class Designer extends LitElement {
                   this.startPlacing(element);
                 }}
                 style="--mdc-theme-secondary: #F5E214; --mdc-theme-on-secondary: rgb(0, 0, 0 / 0.83);"
-                >${twoWindingPTRIconHorizontal}</mwc-fab
+                >${twoWindingAutoPTRIcon}</mwc-fab
               ><mwc-fab
                 mini
                 label="Add Two Winding Transformer"
@@ -835,7 +837,7 @@ export default class Designer extends LitElement {
                   this.startPlacing(element);
                 }}
                 style="--mdc-theme-secondary: #12579B;"
-                >${oneWindingPTRIcon}</mwc-fab
+                >${oneWindingEarthingPTRIcon}</mwc-fab
               ><mwc-fab
                 mini
                 label="Add Two Winding Earthing Transformer"
@@ -857,7 +859,7 @@ export default class Designer extends LitElement {
                   this.startPlacing(element);
                 }}
                 style="--mdc-theme-secondary: #12579B;"
-                >${twoWindingPTRIconHorizontal}</mwc-fab
+                >${twoWindingEarthingPTRIcon}</mwc-fab
               >`
           : nothing}<mwc-icon-button
           icon="zoom_in"
