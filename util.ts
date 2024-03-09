@@ -306,6 +306,10 @@ function updateConnectivityNodes(
   return updates;
 }
 
+export function hasIedCoordinates(ied: Element): boolean {
+  return !!(ied.getAttributeNS(sldNs, 'x') && ied.getAttributeNS(sldNs, 'y'));
+}
+
 export function uniqueName(element: Element, parent: Element): string {
   const children = Array.from(parent.children);
   const oldName = element.getAttribute('name');

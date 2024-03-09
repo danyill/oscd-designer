@@ -36,6 +36,7 @@ import {
   attributes,
   connectionStartPoints,
   elementPath,
+  hasIedCoordinates,
   isBusBar,
   isEqType,
   newConnectEvent,
@@ -70,6 +71,7 @@ const parentTags: Partial<Record<string, string[]>> = {
   Bay: ['VoltageLevel'],
   VoltageLevel: ['Substation'],
   PowerTransformer: ['Bay', 'VoltageLevel', 'Substation'],
+  IED: ['Bay', 'VoltageLevel', 'Substation'],
 };
 
 type EditWizardDetial = { element: Element };
@@ -444,7 +446,8 @@ export class SLDEditor extends LitElement {
   }
 
   canPlaceAt(element: Element, x: number, y: number, w: number, h: number) {
-    if (element.tagName === 'Substation') return true;
+    if (element.tagName === 'Substation' || element.tagName === 'IED')
+      return true;
 
     const overlappingSibling = Array.from(
       this.substation.querySelectorAll(`${element.tagName}, PowerTransformer`)
@@ -1547,6 +1550,11 @@ export class SLDEditor extends LitElement {
         ? svg`<rect width="100%" height="100%" fill="url(#grid)" />`
         : nothing;
 
+    const iedPlacingTarget =
+      this.placing?.tagName === 'IED'
+        ? svg`<rect width="100%" height="100%" fill="url(#grid)" />`
+        : nothing;
+
     const placingLabelTarget = this.placingLabel
       ? svg`<rect width="100%" height="100%" fill="url(#halfgrid)"
       @click=${() => {
@@ -1563,6 +1571,8 @@ export class SLDEditor extends LitElement {
         placingElement = this.renderContainer(this.placing, true);
       else if (this.placing.tagName === 'ConductingEquipment')
         placingElement = this.renderEquipment(this.placing, { preview: true });
+      else if (this.placing.tagName === 'IED')
+        placingElement = this.renderIed(this.placing, { preview: true });
       else if (this.placing.tagName === 'PowerTransformer')
         placingElement = this.renderPowerTransformer(this.placing, true);
       else if (isBusBar(this.placing))
@@ -1824,9 +1834,15 @@ export class SLDEditor extends LitElement {
         ${Array.from(
           this.substation.querySelectorAll(':scope > PowerTransformer')
         ).map(transformer => this.renderPowerTransformer(transformer))}
+        ${Array.from(this.doc.querySelectorAll(':root > IED'))
+          .filter(child => child.tagName === 'IED' && hasIedCoordinates(child))
+          .map(ied => this.renderIed(ied))}
+        ${Array.from(this.doc.querySelectorAll(':root > IED'))
+          .filter(child => child.tagName === 'IED' && hasIedCoordinates(child))
+          .map(ied => this.renderLabel(ied))}
         ${Array.from(
           this.substation.querySelectorAll(
-            'VoltageLevel, Bay, ConductingEquipment, PowerTransformer, Text'
+            'VoltageLevel, Bay, ConductingEquipment, PowerTransformer, Text, ine'
           )
         )
           .filter(
@@ -1834,7 +1850,8 @@ export class SLDEditor extends LitElement {
               !this.placing || e.closest(this.placing.tagName) !== this.placing
           )
           .map(element => this.renderLabel(element))}
-        ${transformerPlacingTarget} ${placingLabelTarget} ${placingElement}
+        ${transformerPlacingTarget} ${iedPlacingTarget} ${placingLabelTarget}
+        ${placingElement}
       </svg>
       ${menu} ${coordinateTooltip}
       <mwc-dialog
@@ -2776,6 +2793,93 @@ export class SLDEditor extends LitElement {
         ? [
             this.renderLabel(equipment),
             ...Array.from(equipment.querySelectorAll('Text')).map(text =>
+              this.renderLabel(text)
+            ),
+          ]
+        : nothing
+    }</g>`;
+  }
+
+  renderIed(ied: Element, { preview = false } = {}) {
+    if (this.placing === ied && !preview) return svg``;
+    if (this.connecting?.from.closest('Substation') === this.substation)
+      return svg``;
+
+    const [x, y] = this.renderedPosition(ied);
+
+    const eqType = ied.getAttribute('type')!;
+    const ringed = ringedEqTypes.has(eqType);
+    const symbol = 'IED';
+    const icon = ringed
+      ? svg`<svg
+    viewBox="0 0 25 25"
+    width="1"
+    height="1"
+  >
+    ${eqRingPath}
+  </svg>`
+      : svg`<use href="#${symbol}" xlink:href="#${symbol}"
+              pointer-events="none" />`;
+
+    let handleClick = (e: MouseEvent) => {
+      let placing = ied;
+      if (e.shiftKey) placing = copy(ied, this.nsp);
+      this.dispatchEvent(newStartPlaceEvent(placing));
+    };
+
+    if (this.placing === ied) {
+      const parent = ied.parentElement;
+      if (parent && this.canPlaceAt(ied, x, y, 1, 1))
+        handleClick = () => {
+          this.dispatchEvent(
+            newPlaceEvent({
+              x,
+              y,
+              element: ied,
+              parent,
+            })
+          );
+        };
+    }
+
+    const clickthrough = !this.idle && this.placing !== ied;
+
+    return svg`<g class="${classMap({
+      equipment: true,
+      preview: this.placing === ied,
+    })}"
+    id="${
+      ied.closest('Substation') === this.substation ? identity(ied) : nothing
+    }"
+    transform="translate(${x} ${y})">
+      <title>${ied.getAttribute('name')}</title>
+      ${icon}
+      ${
+        ringed
+          ? svg`<use pointer-events="none"
+                  href="#${symbol}" xlink:href="#${symbol}" />`
+          : nothing
+      }
+      <rect width="1" height="1" fill="none" pointer-events="${
+        clickthrough ? 'none' : 'all'
+      }"
+        @mousedown=${preventDefault}
+        @click=${handleClick}
+        @auxclick=${(e: MouseEvent) => {
+          if (e.button === 1) {
+            // middle mouse button
+            this.dispatchEvent(newRotateEvent(ied));
+            e.preventDefault();
+          }
+        }}
+        @contextmenu=${(e: MouseEvent) => this.openMenu(ied, e)}
+      />
+    </g>
+    <g class="preview">${
+      preview
+        ? [
+            this.renderLabel(ied),
+            ...Array.from(ied.querySelectorAll('Text')).map(text =>
               this.renderLabel(text)
             ),
           ]

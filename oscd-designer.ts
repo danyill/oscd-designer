@@ -23,6 +23,7 @@ import {
   ConnectEvent,
   elementPath,
   eqTypes,
+  hasIedCoordinates,
   isBusBar,
   PlaceEvent,
   PlaceLabelEvent,
@@ -667,7 +668,7 @@ export default class Designer extends LitElement {
   render() {
     if (!this.doc) return html`<p>Please open an SCL document</p>`;
     return html`<main>
-      <nav>
+      <nav class="equipment">
         ${
           Array.from(
             this.doc.querySelectorAll(':root > Substation > VoltageLevel > Bay')
@@ -929,6 +930,25 @@ export default class Designer extends LitElement {
               ></mwc-icon-button>`
         }
       </nav>
+      <nav class="ieds">
+        ${
+          this.doc.querySelector(':root > IED')
+            ? Array.from(this.doc.querySelectorAll(':root > IED'))
+                .filter(ied => !hasIedCoordinates(ied))
+                .map(
+                  ied =>
+                    html`<mwc-fab
+                      mini
+                      icon="developer_board"
+                      title="${ied.getAttribute('name')!}"
+                      @click=${() => {
+                        this.startPlacing(ied);
+                      }}
+                    ></mwc-fab>`
+                )
+            : nothing
+        }
+      </nav>
       ${Array.from(this.doc.querySelectorAll(':root > Substation')).map(
         subs =>
           html`<sld-editor
@@ -1049,7 +1069,7 @@ export default class Designer extends LitElement {
       margin-top: 12px;
     }
 
-    nav {
+    nav.equipment {
       user-select: none;
       position: sticky;
       top: 68px;
@@ -1059,6 +1079,19 @@ export default class Designer extends LitElement {
       background: #fffd;
       border-radius: 24px;
       z-index: 1;
+    }
+
+    nav.ieds {
+      user-select: none;
+      position: sticky;
+      top: 100px;
+      left: 16px;
+      width: fit-content;
+      max-width: calc(100vw - 32px);
+      background: #fffd;
+      border-radius: 24px;
+      z-index: 1;
+      margin-top: 16px;
     }
 
     mwc-icon-button,
