@@ -8,11 +8,17 @@ import { getReference } from '@openscd/oscd-scl';
 
 import type { Dialog } from '@material/mwc-dialog';
 import type { IconButtonToggle } from '@material/mwc-icon-button-toggle';
+import type { Fab } from '@material/mwc-fab';
+import type { Menu } from '@material/mwc-menu';
+import type { List, SingleSelectedEvent } from '@material/mwc-list';
+import type { ListItem } from '@material/mwc-list/mwc-list-item.js';
+
 import '@material/mwc-button';
 import '@material/mwc-fab';
 import '@material/mwc-icon-button';
 import '@material/mwc-icon-button-toggle';
 import '@material/mwc-icon';
+import '@material/mwc-menu';
 
 import './sld-editor.js';
 
@@ -23,7 +29,7 @@ import {
   ConnectEvent,
   elementPath,
   eqTypes,
-  hasIedCoordinates,
+  // hasIedCoordinates,
   isBusBar,
   PlaceEvent,
   PlaceLabelEvent,
@@ -182,6 +188,12 @@ export default class Designer extends LitElement {
   @query('#about')
   about?: Dialog;
 
+  @query('#addIed')
+  addIed?: Fab;
+
+  @query('#iedMenu')
+  iedMenu?: Menu;
+
   zoomIn() {
     this.gridSize += 3;
   }
@@ -264,6 +276,8 @@ export default class Designer extends LitElement {
       );
     });
     this.templateElements.BusBar = makeBusBar(this.doc, this.nsp);
+
+    if (this.iedMenu) this.iedMenu.anchor = this.addIed as HTMLElement;
   }
 
   rotateElement(element: Element) {
@@ -724,18 +738,88 @@ export default class Designer extends LitElement {
         c => c.tagName === 'Substation'
       )
         ? html`<mwc-fab
-            mini
-            label="Add VoltageLevel"
-            title="Add VoltageLevel"
-            @click=${() => {
-              const element =
-                this.templateElements.VoltageLevel!.cloneNode() as Element;
-              this.startPlacing(element);
-            }}
-            style="--mdc-theme-secondary: #F5E214;"
-          >
-            ${voltageLevelIcon}
-          </mwc-fab>`
+              mini
+              label="Add VoltageLevel"
+              title="Add VoltageLevel"
+              @click=${() => {
+                const element =
+                  this.templateElements.VoltageLevel!.cloneNode() as Element;
+                this.startPlacing(element);
+              }}
+              style="--mdc-theme-secondary: #F5E214;"
+            >
+              ${voltageLevelIcon}
+            </mwc-fab>
+            ${Array.from(this.doc.documentElement.children).find(
+              c => c.tagName === 'IED'
+            )
+              ? html`<mwc-fab
+                    mini
+                    icon="developer_board"
+                    id="addIED"
+                    label="Add IED"
+                    title="Add IED"
+                    @click=${() => {
+                      this.iedMenu!.show();
+                    }}
+                  ></mwc-fab>
+                  <mwc-menu
+                    corner="BOTTOM_RIGHT"
+                    menuCorner="END"
+                    id="iedMenu"
+                    .anchor=${this.addIed}
+                    @selected=${(ev: SingleSelectedEvent) => {
+                      const selectedListItem = (ev.target as List)
+                        .selected! as ListItem;
+                      if (!selectedListItem) return;
+                      const ied = this.doc.querySelector(
+                        `:root > IED[name="${selectedListItem.dataset.name}"]`
+                      )!;
+                      this.iedMenu!.close();
+                      selectedListItem.selected = false;
+                      this.startPlacing(ied);
+                    }}
+                  >
+                    ${Array.from(this.doc.querySelectorAll(':root > IED'))
+                      .sort((a, b) => {
+                        const aPlaced = a.hasAttributeNS(sldNs, 'x')
+                          ? 'A'
+                          : 'B';
+                        const bPlaced = b.hasAttributeNS(sldNs, 'x')
+                          ? 'A'
+                          : 'B';
+                        const aName = a.getAttribute('name')!.toLowerCase();
+                        const bName = a.getAttribute('name')!.toLowerCase();
+                        return `${bPlaced} ${bName}`.localeCompare(
+                          `${aPlaced} ${aName}`
+                        );
+                      })
+                      .map(
+                        ied =>
+                          html`<mwc-list-item
+                            twoline
+                            graphic="control"
+                            ?hasMeta=${ied.hasAttributeNS(sldNs, 'x')}
+                            data-name="${ied.getAttribute('name')!}"
+                          >
+                            <span>${ied.getAttribute('name')!}</span>
+                            <span slot="secondary"
+                              >${[
+                                ied.getAttribute('manufacturer'),
+                                ied.getAttribute('type'),
+                                ied.getAttribute('desc'),
+                              ]
+                                .filter(a => !!a)
+                                .join(' - ')}
+                            </span>
+                            ${ied.hasAttributeNS(sldNs, 'x')
+                              ? html`<mwc-icon slot="meta">pin_drop</mwc-icon>`
+                              : nothing}
+                            <mwc-icon slot="graphic">developer_board</mwc-icon>
+                          </mwc-list-item>`
+                      )}
+                  </mwc-menu>`
+              : nothing}`
         : nothing
     }<mwc-fab
           mini
@@ -928,25 +1012,6 @@ export default class Designer extends LitElement {
                 title="About"
                 @click=${() => this.about?.show()}
               ></mwc-icon-button>`
-        }
-      </nav>
-      <nav class="ieds">
-        ${
-          this.doc.querySelector(':root > IED')
-            ? Array.from(this.doc.querySelectorAll(':root > IED'))
-                .filter(ied => !hasIedCoordinates(ied))
-                .map(
-                  ied =>
-                    html`<mwc-fab
-                      mini
-                      icon="developer_board"
-                      title="${ied.getAttribute('name')!}"
-                      @click=${() => {
-                        this.startPlacing(ied);
-                      }}
-                    ></mwc-fab>`
-                )
-            : nothing
         }
       </nav>
       ${Array.from(this.doc.querySelectorAll(':root > Substation')).map(
