@@ -182,8 +182,17 @@ export default class Designer extends LitElement {
     return true;
   }
 
+  @state()
+  get showIeds(): boolean {
+    if (this.iedToggle) return this.iedToggle.on;
+    return true;
+  }
+
   @query('#labels')
   labelToggle?: IconButtonToggle;
+
+  @query('#ieds')
+  iedToggle?: IconButtonToggle;
 
   @query('#about')
   about?: Dialog;
@@ -253,6 +262,8 @@ export default class Designer extends LitElement {
   }
 
   updated(changedProperties: Map<string, any>) {
+    if (this.iedMenu) this.iedMenu.anchor = this.addIed as HTMLElement;
+
     if (!changedProperties.has('doc')) return;
     const sldNsPrefix = this.doc.documentElement.lookupPrefix(sldNs);
     if (sldNsPrefix) {
@@ -276,8 +287,6 @@ export default class Designer extends LitElement {
       );
     });
     this.templateElements.BusBar = makeBusBar(this.doc, this.nsp);
-
-    if (this.iedMenu) this.iedMenu.anchor = this.addIed as HTMLElement;
   }
 
   rotateElement(element: Element) {
@@ -317,7 +326,13 @@ export default class Designer extends LitElement {
     this.reset();
   }
 
-  placeElement(element: Element, parent: Element, x: number, y: number) {
+  placeElement(
+    element: Element,
+    parent: Element,
+    x: number,
+    y: number,
+    substation?: Element
+  ) {
     const edits: Edit[] = [];
     if (element.parentElement !== parent) {
       edits.push(...reparentElement(element, parent));
@@ -353,6 +368,11 @@ export default class Designer extends LitElement {
           ly += 2;
         }
       }
+      if (element.tagName === 'IED' && !element.hasAttributeNS(sldNs, 'lx')) {
+        lx += 1;
+        ly += 1;
+      }
+
       edits.push({
         element,
         attributes: {
@@ -360,6 +380,12 @@ export default class Designer extends LitElement {
           y: { namespaceURI: sldNs, value: y.toString() },
           lx: { namespaceURI: sldNs, value: (lx + dx).toString() },
           ly: { namespaceURI: sldNs, value: (ly + dy).toString() },
+          ...(substation && {
+            substation: {
+              namespaceURI: sldNs,
+              value: substation?.getAttribute('name'),
+            },
+          }),
         },
       });
     }
@@ -760,10 +786,12 @@ export default class Designer extends LitElement {
                     label="Add IED"
                     title="Add IED"
                     @click=${() => {
+                      if (this.iedToggle) this.iedToggle.on = true;
                       this.iedMenu!.show();
                     }}
                   ></mwc-fab>
                   <mwc-menu
+                    fixed
                     corner="BOTTOM_RIGHT"
                     menuCorner="END"
                     id="iedMenu"
@@ -964,14 +992,25 @@ export default class Designer extends LitElement {
         }${
       this.doc.querySelector('VoltageLevel, PowerTransformer')
         ? html`<mwc-icon-button-toggle
-            id="labels"
-            label="Toggle Labels"
-            title="Toggle Labels"
-            on
-            onIcon="font_download"
-            offIcon="font_download_off"
-            @click=${() => this.requestUpdate()}
-          ></mwc-icon-button-toggle>`
+              id="labels"
+              label="Toggle Labels"
+              title="Toggle Labels"
+              on
+              onIcon="font_download"
+              offIcon="font_download_off"
+              @click=${() => this.requestUpdate()}
+            ></mwc-icon-button-toggle
+            ><mwc-icon-button-toggle
+              id="ieds"
+              label="Toggle IEDs"
+              title="Toggle IEDs"
+              on
+              onIcon="developer_board"
+              offIcon="developer_board_off"
+              @click=${() => {
+                if (this.iedMenu) this.requestUpdate();
+              }}
+            ></mwc-icon-button-toggle> `
         : nothing
     }${
       this.doc.querySelector('Substation')
@@ -1028,6 +1067,7 @@ export default class Designer extends LitElement {
             .placingLabel=${this.placingLabel}
             .connecting=${this.connecting}
             .showLabels=${this.showLabels}
+            .showIeds=${this.showIeds}
             @oscd-sld-start-resize-br=${({ detail }: StartEvent) => {
               this.startResizingBottomRight(detail);
             }}
@@ -1088,8 +1128,9 @@ export default class Designer extends LitElement {
               this.reset();
             }}
             @oscd-sld-place=${({
-              detail: { element, parent, x, y },
-            }: PlaceEvent) => this.placeElement(element, parent, x, y)}
+              detail: { element, parent, x, y, substation },
+            }: PlaceEvent) =>
+              this.placeElement(element, parent, x, y, substation)}
             @oscd-sld-place-label=${({
               detail: { element, x, y },
             }: PlaceLabelEvent) => this.placeLabel(element, x, y)}

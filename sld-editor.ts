@@ -1,4 +1,12 @@
-import { css, html, nothing, LitElement, svg, TemplateResult } from 'lit';
+import {
+  css,
+  html,
+  nothing,
+  LitElement,
+  svg,
+  TemplateResult,
+  SVGTemplateResult,
+} from 'lit';
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -18,6 +26,7 @@ import '@material/mwc-snackbar';
 import '@material/mwc-textfield';
 
 import { getReference, identity } from '@openscd/oscd-scl';
+import { removeIED } from '@openenergytools/scl-lib';
 import {
   bayGraphic,
   eqRingPath,
@@ -307,6 +316,8 @@ function renderMenuHeader(element: Element) {
     } else {
       footerGraphic = ptrIcon(1, { slot: 'graphic', kind });
     }
+  } else if (element.tagName === 'IED') {
+    footerGraphic = html`<mwc-icon slot="graphic">developer_board</mwc-icon>`;
   } else if (element.tagName === 'TransformerWinding')
     footerGraphic = ptrIcon(1, { slot: 'graphic' });
   else if (element.tagName === 'ConductingEquipment')
@@ -376,6 +387,9 @@ export class SLDEditor extends LitElement {
 
   @property()
   showLabels?: boolean;
+
+  @property()
+  showIeds?: boolean;
 
   @state()
   get idle(): boolean {
@@ -822,6 +836,92 @@ export class SLDEditor extends LitElement {
           <mwc-icon slot="graphic">cancel</mwc-icon>
         </mwc-list-item>`,
       });
+
+    return items;
+  }
+
+  iedMenuItems(ied: Element) {
+    const textElement = ied.querySelector(':scope > Text');
+    const items: MenuItem[] = [
+      {
+        content: html`<mwc-list-item graphic="icon">
+          <span>Move</span>
+          <svg
+            xmlns="${svgNs}"
+            height="24"
+            width="24"
+            slot="graphic"
+            viewBox="0 96 960 960"
+          >
+            ${movePath}
+          </svg>
+        </mwc-list-item>`,
+        handler: () => this.dispatchEvent(newStartPlaceEvent(ied)),
+      },
+      {
+        content: html`<mwc-list-item graphic="icon">
+          <span>Move Label</span>
+          <mwc-icon slot="graphic">text_rotation_none</mwc-icon>
+        </mwc-list-item>`,
+        handler: () => this.dispatchEvent(newStartPlaceLabelEvent(ied)),
+      },
+      textElement
+        ? {
+            content: html`<mwc-list-item graphic="icon">
+              <span>Remove Text</span>
+              <mwc-icon slot="graphic">format_strikethrough</mwc-icon>
+            </mwc-list-item>`,
+            handler: () =>
+              this.dispatchEvent(newEditEvent({ node: textElement })),
+          }
+        : {
+            content: html`<mwc-list-item graphic="icon">
+              <span>Add Text</span>
+              <mwc-icon slot="graphic">title</mwc-icon>
+            </mwc-list-item>`,
+            handler: () => this.addTextTo(ied),
+          },
+
+      {
+        content: html`<mwc-list-item graphic="icon">
+          <span>Edit</span>
+          <mwc-icon slot="graphic">edit</mwc-icon>
+        </mwc-list-item>`,
+        handler: () => this.dispatchEvent(newEditWizardEvent(ied)),
+      },
+      {
+        content: html`<mwc-list-item graphic="icon">
+          <span>Delete</span>
+          <mwc-icon slot="graphic">delete</mwc-icon>
+        </mwc-list-item>`,
+        handler: () => {
+          const edits: Edit[] = [];
+          edits.push(removeIED({ node: ied }));
+          this.dispatchEvent(newEditEvent(edits));
+        },
+      },
+      {
+        content: html`<mwc-list-item graphic="icon">
+          <span>Remove from SLD</span>
+          <mwc-icon slot="graphic">location_off</mwc-icon>
+        </mwc-list-item>`,
+        handler: () => {
+          const edits: Edit[] = [];
+          this.dispatchEvent(
+            newEditEvent({
+              element: ied,
+              attributes: {
+                [`${this.nsp}:x`]: { namespaceURI: sldNs, value: null },
+                [`${this.nsp}:y`]: { namespaceURI: sldNs, value: null },
+                [`${this.nsp}:lx`]: { namespaceURI: sldNs, value: null },
+                [`${this.nsp}:ly`]: { namespaceURI: sldNs, value: null },
+              },
+            })
+          );
+          this.dispatchEvent(newEditEvent(edits));
+        },
+      },
+    ];
 
     return items;
   }
@@ -1485,6 +1585,8 @@ export class SLDEditor extends LitElement {
       items.push({ content: renderMenuHeader(transformer) });
       items.push({ content: html`<li divider role="separator"></li>` });
       items.push(...this.transformerMenuItems(transformer));
+    } else if (element.tagName === 'IED') {
+      items.push(...this.iedMenuItems(element));
     } else if (element.tagName === 'Text') {
       items.push(...this.textMenuItems(element));
       items.push({ content: html`<li divider role="separator"></li>` });
@@ -1835,14 +1937,29 @@ export class SLDEditor extends LitElement {
           this.substation.querySelectorAll(':scope > PowerTransformer')
         ).map(transformer => this.renderPowerTransformer(transformer))}
         ${Array.from(this.doc.querySelectorAll(':root > IED'))
-          .filter(child => child.tagName === 'IED' && hasIedCoordinates(child))
+          .filter(
+            child =>
+              child.tagName === 'IED' &&
+              hasIedCoordinates(child) &&
+              this.substation.getAttribute('name') ===
+                child.getAttributeNS(sldNs, 'substation') &&
+              this.showIeds
+          )
           .map(ied => this.renderIed(ied))}
         ${Array.from(this.doc.querySelectorAll(':root > IED'))
-          .filter(child => child.tagName === 'IED' && hasIedCoordinates(child))
+          .filter(
+            child =>
+              child.tagName === 'IED' &&
+              hasIedCoordinates(child) &&
+              this.substation.getAttribute('name') ===
+                child.getAttributeNS(sldNs, 'substation') &&
+              this.showIeds &&
+              !(this.placing === child)
+          )
           .map(ied => this.renderLabel(ied))}
         ${Array.from(
           this.substation.querySelectorAll(
-            'VoltageLevel, Bay, ConductingEquipment, PowerTransformer, Text, ine'
+            'VoltageLevel, Bay, ConductingEquipment, PowerTransformer, Text'
           )
         )
           .filter(
@@ -2800,9 +2917,20 @@ export class SLDEditor extends LitElement {
     }</g>`;
   }
 
-  renderIed(ied: Element, { preview = false } = {}) {
+  renderIed(ied: Element, { preview = false } = {}): SVGTemplateResult {
+    if (!this.showIeds) return svg``;
+    const subRef = ied.getAttributeNS(sldNs, 'substation');
+    const inCurrentSubstation =
+      subRef && this.substation.getAttribute('name') === subRef;
+
+    if (!inCurrentSubstation && !preview) return svg``;
+
     if (this.placing === ied && !preview) return svg``;
-    if (this.connecting?.from.closest('Substation') === this.substation)
+
+    if (
+      this.connecting?.from.closest('Substation') === this.substation &&
+      !preview
+    )
       return svg``;
 
     const [x, y] = this.renderedPosition(ied);
@@ -2837,6 +2965,7 @@ export class SLDEditor extends LitElement {
               y,
               element: ied,
               parent,
+              substation: this.substation,
             })
           );
         };
@@ -2845,7 +2974,7 @@ export class SLDEditor extends LitElement {
     const clickthrough = !this.idle && this.placing !== ied;
 
     return svg`<g class="${classMap({
-      equipment: true,
+      ied: true,
       preview: this.placing === ied,
     })}"
     id="${
@@ -2879,9 +3008,9 @@ export class SLDEditor extends LitElement {
       preview
         ? [
             this.renderLabel(ied),
-            ...Array.from(ied.querySelectorAll('Text')).map(text =>
-              this.renderLabel(text)
-            ),
+            ied.querySelector('Text')
+              ? this.renderLabel(ied.querySelector('Text')!)
+              : nothing,
           ]
         : nothing
     }</g>`;

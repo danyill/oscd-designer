@@ -481,6 +481,7 @@ export type PlaceDetail = {
   y: number;
   element: Element;
   parent: Element;
+  substation?: Element;
 };
 export type PlaceEvent = CustomEvent<PlaceDetail>;
 export function newPlaceEvent(detail: PlaceDetail): PlaceEvent {
