@@ -12,7 +12,7 @@ import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { createRef, Ref, ref } from 'lit/directives/ref.js';
 
-import { Edit, newEditEvent } from '@openscd/open-scd-core';
+import { Edit, Update, newEditEvent } from '@openscd/open-scd-core';
 
 import type { Dialog } from '@material/mwc-dialog';
 import type { SingleSelectedEvent } from '@material/mwc-list';
@@ -44,6 +44,8 @@ import {
 import {
   attributes,
   connectionStartPoints,
+  containedIEDs,
+  contains,
   elementPath,
   hasIedCoordinates,
   isBusBar,
@@ -62,6 +64,7 @@ import {
   Point,
   prettyPrint,
   privType,
+  Rect,
   removeNode,
   removeTerminal,
   ringedEqTypes,
@@ -94,12 +97,6 @@ function newEditWizardEvent(element: Element): CustomEvent<EditWizardDetial> {
 }
 
 type MenuItem = { handler?: () => void; content: TemplateResult };
-
-type Rect = [number, number, number, number];
-
-function contains([x1, y1, w1, h1]: Rect, [x2, y2, w2, h2]: Rect) {
-  return x1 <= x2 && y1 <= y2 && x1 + w1 >= x2 + w2 && y1 + h1 >= y2 + h2;
-}
 
 function overlaps([x1, y1, w1, h1]: Rect, [x2, y2, w2, h2]: Rect) {
   if (x1 >= x2 + w2 || x2 >= x1 + w1) return false;
@@ -345,6 +342,19 @@ function renderMenuHeader(element: Element) {
   </mwc-list-item>`;
 }
 
+function removeIedSld(ied: Element, nsp: string): Update {
+  return {
+    element: ied,
+    attributes: {
+      [`${nsp}:x`]: { namespaceURI: sldNs, value: null },
+      [`${nsp}:y`]: { namespaceURI: sldNs, value: null },
+      [`${nsp}:lx`]: { namespaceURI: sldNs, value: null },
+      [`${nsp}:ly`]: { namespaceURI: sldNs, value: null },
+      [`${nsp}:substation`]: { namespaceURI: sldNs, value: null },
+    },
+  };
+}
+
 @customElement('sld-editor')
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 export class SLDEditor extends LitElement {
@@ -490,7 +500,7 @@ export class SLDEditor extends LitElement {
     return false;
   }
 
-  canResizeTo(element: Element, w: number, h: number) {
+  canResizeTo(element: Element, w: number, h: number): boolean {
     const {
       pos: [x, y],
       dim: [oldW, oldH],
@@ -508,15 +518,35 @@ export class SLDEditor extends LitElement {
         pos: [cx, cy],
         dim: [cw, ch],
       } = attributes(child);
-
       return !contains([x, y, w, h], [cx, cy, cw, ch]);
     });
     if (lostChild) return false;
 
+    if (['Bay', 'VoltageLevel', 'Substation'].includes(element.tagName)) {
+      const iedsInContaner = containedIEDs(element);
+
+      if (iedsInContaner) {
+        const lostIed = iedsInContaner.find(ied => {
+          const {
+            pos: [cx, cy],
+            dim: [cw, ch],
+          } = attributes(ied);
+          return !contains([x, y, w, h], [cx, cy, cw, ch]);
+        });
+        if (lostIed) return false;
+      }
+    }
+
     return true;
   }
 
-  canResizeToTL(element: Element, x: number, y: number, w: number, h: number) {
+  canResizeToTL(
+    element: Element,
+    x: number,
+    y: number,
+    w: number,
+    h: number
+  ): boolean {
     if (!this.canPlaceAt(element, x, y, w, h)) return false;
 
     const lostChild = Array.from(element.children).find(child => {
@@ -530,6 +560,21 @@ export class SLDEditor extends LitElement {
     });
     if (lostChild) return false;
 
+    if (['Bay', 'VoltageLevel', 'Substation'].includes(element.tagName)) {
+      const iedsInContaner = containedIEDs(element);
+
+      if (iedsInContaner) {
+        const lostIed = iedsInContaner.find(ied => {
+          const {
+            pos: [cx, cy],
+            dim: [cw, ch],
+          } = attributes(ied);
+          return !contains([x, y, w, h], [cx, cy, cw, ch]);
+        });
+        if (lostIed) return false;
+      }
+    }
+
     return true;
   }
 
@@ -539,8 +584,11 @@ export class SLDEditor extends LitElement {
     } = attributes(element);
     const [offsetX, offsetY] = this.placingOffset;
     if (
-      this.placing &&
-      element.closest(this.placing.tagName) === this.placing
+      (this.placing &&
+        element.closest(this.placing.tagName) === this.placing) ||
+      (['VoltageLevel', 'Bay'].includes(`${this.placing?.tagName}`) &&
+        this.placing &&
+        containedIEDs(this.placing).includes(element))
     ) {
       const {
         pos: [parentX, parentY],
@@ -570,8 +618,11 @@ export class SLDEditor extends LitElement {
       pos: [x, y],
     } = attributes(element);
     if (
-      this.placing &&
-      element.closest(this.placing.tagName) === this.placing
+      (this.placing &&
+        element.closest(this.placing.tagName) === this.placing) ||
+      (['VoltageLevel', 'Bay'].includes(`${this.placing?.tagName}`) &&
+        this.placing &&
+        containedIEDs(this.placing).includes(element))
     ) {
       const {
         pos: [parentX, parentY],
@@ -906,19 +957,7 @@ export class SLDEditor extends LitElement {
           <mwc-icon slot="graphic">location_off</mwc-icon>
         </mwc-list-item>`,
         handler: () => {
-          const edits: Edit[] = [];
-          this.dispatchEvent(
-            newEditEvent({
-              element: ied,
-              attributes: {
-                [`${this.nsp}:x`]: { namespaceURI: sldNs, value: null },
-                [`${this.nsp}:y`]: { namespaceURI: sldNs, value: null },
-                [`${this.nsp}:lx`]: { namespaceURI: sldNs, value: null },
-                [`${this.nsp}:ly`]: { namespaceURI: sldNs, value: null },
-              },
-            })
-          );
-          this.dispatchEvent(newEditEvent(edits));
+          this.dispatchEvent(newEditEvent(removeIedSld(ied, this.nsp)));
         },
       },
     ];
@@ -1834,8 +1873,21 @@ export class SLDEditor extends LitElement {
         <mwc-icon-button
           label="Delete Substation"
           title="Delete Substation"
-          @click=${() =>
-            this.dispatchEvent(newEditEvent({ node: this.substation }))}
+          @click=${() => {
+            const name = this.substation.getAttribute('name');
+
+            const iedReferences: Update[] = [];
+            this.doc.querySelectorAll(':root > IED').forEach(ied => {
+              const subRef = ied.getAttributeNS(sldNs, 'substation');
+              if (name === subRef) {
+                iedReferences.push(removeIedSld(ied, this.nsp));
+              }
+            });
+
+            this.dispatchEvent(
+              newEditEvent([...iedReferences, { node: this.substation }])
+            );
+          }}
           icon="delete"
         >
         </mwc-icon-button>
@@ -2249,6 +2301,8 @@ export class SLDEditor extends LitElement {
       this.resizingBR !== bayOrVL &&
       this.resizingTL !== bayOrVL;
 
+    const containedIeds = containedIEDs(bayOrVL);
+
     return svg`<g id="${
       bayOrVL.closest('Substation') === this.substation
         ? identity(bayOrVL)
@@ -2284,6 +2338,8 @@ export class SLDEditor extends LitElement {
       ${Array.from(bayOrVL.children)
         .filter(child => child.tagName === 'PowerTransformer')
         .map(equipment => this.renderPowerTransformer(equipment))}
+      ${containedIeds.map(ied => this.renderIed(ied))}
+      ${containedIeds.map(ied => this.renderLabel(ied))}
       ${
         preview
           ? Array.from(bayOrVL.querySelectorAll('ConnectivityNode'))
@@ -2949,10 +3005,8 @@ export class SLDEditor extends LitElement {
       : svg`<use href="#${symbol}" xlink:href="#${symbol}"
               pointer-events="none" />`;
 
-    let handleClick = (e: MouseEvent) => {
-      let placing = ied;
-      if (e.shiftKey) placing = copy(ied, this.nsp);
-      this.dispatchEvent(newStartPlaceEvent(placing));
+    let handleClick = () => {
+      this.dispatchEvent(newStartPlaceEvent(ied));
     };
 
     if (this.placing === ied) {

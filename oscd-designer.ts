@@ -27,6 +27,7 @@ import {
   attributes,
   ConnectDetail,
   ConnectEvent,
+  containedIEDs,
   elementPath,
   eqTypes,
   // hasIedCoordinates,
@@ -414,30 +415,32 @@ export default class Designer extends LitElement {
       element.querySelectorAll(
         'Bay, ConductingEquipment, PowerTransformer, Vertex'
       )
-    ).forEach(descendant => {
-      const {
-        pos: [descX, descY],
-        label: [descLX, descLY],
-      } = attributes(descendant);
-      const newAttributes: Update['attributes'] = {
-        x: { namespaceURI: sldNs, value: (descX + dx).toString() },
-        y: { namespaceURI: sldNs, value: (descY + dy).toString() },
-      };
-      if (descendant.localName !== 'Vertex') {
-        newAttributes.lx = {
-          namespaceURI: sldNs,
-          value: (descLX + dx).toString(),
+    )
+      .concat(containedIEDs(element)) // ***
+      .forEach(descendant => {
+        const {
+          pos: [descX, descY],
+          label: [descLX, descLY],
+        } = attributes(descendant);
+        const newAttributes: Update['attributes'] = {
+          x: { namespaceURI: sldNs, value: (descX + dx).toString() },
+          y: { namespaceURI: sldNs, value: (descY + dy).toString() },
         };
-        newAttributes.ly = {
-          namespaceURI: sldNs,
-          value: (descLY + dy).toString(),
-        };
-      }
-      edits.push({
-        element: descendant,
-        attributes: newAttributes,
+        if (descendant.localName !== 'Vertex') {
+          newAttributes.lx = {
+            namespaceURI: sldNs,
+            value: (descLX + dx).toString(),
+          };
+          newAttributes.ly = {
+            namespaceURI: sldNs,
+            value: (descLY + dy).toString(),
+          };
+        }
+        edits.push({
+          element: descendant,
+          attributes: newAttributes,
+        });
       });
-    });
 
     if (
       element.tagName === 'ConductingEquipment' ||
@@ -1129,8 +1132,10 @@ export default class Designer extends LitElement {
             }}
             @oscd-sld-place=${({
               detail: { element, parent, x, y, substation },
-            }: PlaceEvent) =>
-              this.placeElement(element, parent, x, y, substation)}
+            }: PlaceEvent) => {
+              console.log('oscd-sld-place');
+              this.placeElement(element, parent, x, y, substation);
+            }}
             @oscd-sld-place-label=${({
               detail: { element, x, y },
             }: PlaceLabelEvent) => this.placeLabel(element, x, y)}
@@ -1185,19 +1190,6 @@ export default class Designer extends LitElement {
       background: #fffd;
       border-radius: 24px;
       z-index: 1;
-    }
-
-    nav.ieds {
-      user-select: none;
-      position: sticky;
-      top: 100px;
-      left: 16px;
-      width: fit-content;
-      max-width: calc(100vw - 32px);
-      background: #fffd;
-      border-radius: 24px;
-      z-index: 1;
-      margin-top: 16px;
     }
 
     mwc-icon-button,

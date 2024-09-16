@@ -58,6 +58,8 @@ export function uuid() {
 
 const transformerKinds = ['default', 'auto', 'earthing'] as const;
 export type Point = [number, number];
+export type Rect = [number, number, number, number];
+
 export type TransformerKind = (typeof transformerKinds)[number];
 export type Attrs = {
   pos: Point;
@@ -439,6 +441,29 @@ export function connectionStartPoints(equipment: Element): {
   ] as [Point, Point];
 
   return { T1, T2 };
+}
+
+export function contains([x1, y1, w1, h1]: Rect, [x2, y2, w2, h2]: Rect) {
+  return x1 <= x2 && y1 <= y2 && x1 + w1 >= x2 + w2 && y1 + h1 >= y2 + h2;
+}
+
+export function containedIEDs(element: Element): Element[] {
+  const {
+    pos: [x, y],
+    dim: [w, h],
+  } = attributes(element);
+
+  const doc = element.ownerDocument;
+
+  return Array.from(doc.querySelectorAll(':root > IED')).filter(ied => {
+    const name = element.closest('Substation')?.getAttribute('name');
+    if (!(ied.getAttributeNS(sldNs, 'substation') === name)) return false;
+    const {
+      pos: [cx, cy],
+      dim: [cw, ch],
+    } = attributes(ied);
+    return contains([x, y, w, h], [cx, cy, cw, ch]);
+  });
 }
 
 export type ResizeDetail = {
