@@ -413,20 +413,27 @@ export default class Designer extends LitElement {
 
     Array.from(
       element.querySelectorAll(
-        'Bay, ConductingEquipment, PowerTransformer, Vertex'
+        'VoltageLevel, Bay, ConductingEquipment, PowerTransformer, Vertex'
       )
     )
-      .concat(containedIEDs(element)) // ***
-      .forEach(descendant => {
+      .concat(containedIEDs(element))
+      .forEach(dependent => {
         const {
           pos: [descX, descY],
           label: [descLX, descLY],
-        } = attributes(descendant);
+        } = attributes(dependent);
         const newAttributes: Update['attributes'] = {
           x: { namespaceURI: sldNs, value: (descX + dx).toString() },
           y: { namespaceURI: sldNs, value: (descY + dy).toString() },
+          ...(dependent.tagName === 'IED' &&
+            substation && {
+              substation: {
+                namespaceURI: sldNs,
+                value: substation.getAttribute('name'),
+              },
+            }),
         };
-        if (descendant.localName !== 'Vertex') {
+        if (dependent.localName !== 'Vertex') {
           newAttributes.lx = {
             namespaceURI: sldNs,
             value: (descLX + dx).toString(),
@@ -437,7 +444,7 @@ export default class Designer extends LitElement {
           };
         }
         edits.push({
-          element: descendant,
+          element: dependent,
           attributes: newAttributes,
         });
       });
@@ -1133,7 +1140,6 @@ export default class Designer extends LitElement {
             @oscd-sld-place=${({
               detail: { element, parent, x, y, substation },
             }: PlaceEvent) => {
-              console.log('oscd-sld-place');
               this.placeElement(element, parent, x, y, substation);
             }}
             @oscd-sld-place-label=${({

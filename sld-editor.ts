@@ -328,7 +328,11 @@ function renderMenuHeader(element: Element) {
     footerGraphic = html`<mwc-icon slot="graphic">title</mwc-icon>`;
     detail = element.textContent;
   }
-  return html`<mwc-list-item ?twoline=${detail} graphic="avatar" noninteractive>
+  return html`<mwc-list-item
+    ?twoline=${detail !== '' && detail !== null}
+    graphic="avatar"
+    noninteractive
+  >
     <span>${name}</span>
     ${detail
       ? html`<span
@@ -1440,6 +1444,10 @@ export class SLDEditor extends LitElement {
             if (cNode && cNode.closest(bayOrVL.tagName) !== bayOrVL)
               edits.push(...removeNode(cNode));
           });
+          containedIEDs(bayOrVL).forEach(ied => {
+            edits.push(removeIedSld(ied, this.nsp));
+          });
+
           edits.push({ node: bayOrVL });
           this.dispatchEvent(newEditEvent(edits));
         },
@@ -2254,6 +2262,7 @@ export class SLDEditor extends LitElement {
               y,
               element: bayOrVL,
               parent: parent!,
+              substation: this.substation,
             })
           );
       else invalid = true;
@@ -2301,7 +2310,20 @@ export class SLDEditor extends LitElement {
       this.resizingBR !== bayOrVL &&
       this.resizingTL !== bayOrVL;
 
-    const containedIeds = containedIEDs(bayOrVL);
+    // avoid duplication of IEDs in boths VoltageLevel and Bays
+    let containedIeds: Element[] = [];
+    if (preview) {
+      if (isVL) {
+        const iedsInBays = Array.from(bayOrVL.children)
+          .filter(isBay)
+          .flatMap(bay => containedIEDs(bay));
+        containedIeds = containedIEDs(bayOrVL).filter(
+          ied => !iedsInBays.includes(ied)
+        );
+      } else {
+        containedIeds = containedIEDs(bayOrVL);
+      }
+    }
 
     return svg`<g id="${
       bayOrVL.closest('Substation') === this.substation
@@ -2338,7 +2360,7 @@ export class SLDEditor extends LitElement {
       ${Array.from(bayOrVL.children)
         .filter(child => child.tagName === 'PowerTransformer')
         .map(equipment => this.renderPowerTransformer(equipment))}
-      ${containedIeds.map(ied => this.renderIed(ied))}
+      ${containedIeds.map(ied => this.renderIed(ied, { preview: true }))}
       ${containedIeds.map(ied => this.renderLabel(ied))}
       ${
         preview
@@ -2982,12 +3004,6 @@ export class SLDEditor extends LitElement {
     if (!inCurrentSubstation && !preview) return svg``;
 
     if (this.placing === ied && !preview) return svg``;
-
-    if (
-      this.connecting?.from.closest('Substation') === this.substation &&
-      !preview
-    )
-      return svg``;
 
     const [x, y] = this.renderedPosition(ied);
 
