@@ -444,32 +444,22 @@ export function contains([x1, y1, w1, h1]: Rect, [x2, y2, w2, h2]: Rect) {
 }
 
 export function isIed(element: Element): boolean {
-  return (
-    (element.localName === 'IEDName' && element.namespaceURI === sldNs) ||
-    (element.tagName === 'Private' &&
-      element.getAttribute('type') === 'OpenSCD-Linked-IEDs')
-  );
+  return element.localName === 'IEDName' && element.namespaceURI === sldNs;
 }
 
 export function hasIedCoordinates(element: Element): boolean {
   return (
-    (element.localName === 'IEDName' &&
-      element.namespaceURI === sldNs &&
-      element.hasAttributeNS(sldNs, 'x')) ||
-    (element.tagName === 'Private' &&
-      element.getAttribute('type') === 'OpenSCD-Linked-IEDs' &&
-      (element.firstElementChild?.hasAttributeNS(sldNs, 'x') ?? false))
+    element.localName === 'IEDName' &&
+    element.namespaceURI === sldNs &&
+    element.hasAttributeNS(sldNs, 'x')
   );
 }
 
 export function hasIedLabelCoordinates(element: Element): boolean {
   return (
-    (element.localName === 'IEDName' &&
-      element.namespaceURI === sldNs &&
-      element.hasAttributeNS(sldNs, 'lx')) ||
-    (element.tagName === 'Private' &&
-      element.getAttribute('type') === 'OpenSCD-Linked-IEDs' &&
-      (element.firstElementChild?.hasAttributeNS(sldNs, 'lx') ?? false))
+    element.localName === 'IEDName' &&
+    element.namespaceURI === sldNs &&
+    element.hasAttributeNS(sldNs, 'lx')
   );
 }
 
