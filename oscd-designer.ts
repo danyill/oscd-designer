@@ -79,36 +79,6 @@ function makeBusBar(doc: XMLDocument, nsp: string) {
   return busBar;
 }
 
-function makeOrGetIed(name: string, doc: XMLDocument): Element {
-  const linkedIed = Array.from(
-    doc
-      .querySelector(':root > Substation')!
-      .getElementsByTagNameNS(sldNs, 'IEDName') ?? []
-  ).find(
-    lIed =>
-      lIed.getAttributeNS(sldNs, 'name') === name &&
-      lIed.parentElement?.tagName === 'Private'
-  );
-
-  if (linkedIed) return linkedIed;
-
-  let sclPrivate = doc.querySelector(
-    ':root > Substation Private[type="OpenSCD-Linked-IEDs"]'
-  );
-  if (!sclPrivate) {
-    sclPrivate = doc.createElementNS(
-      doc.documentElement.namespaceURI,
-      'Private'
-    );
-    sclPrivate.setAttribute('type', 'OpenSCD-Linked-IEDs');
-  }
-
-  const newLinkedIed = doc.createElementNS(sldNs, 'esld:IEDName');
-  newLinkedIed.setAttributeNS(sldNs, 'name', name);
-  sclPrivate.appendChild(newLinkedIed);
-  return sclPrivate;
-}
-
 function cutSectionAt(
   section: Element,
   index: number,
@@ -392,22 +362,15 @@ export default class Designer extends LitElement {
         }
       }
       if (
-        (element.localName === 'IEDName' &&
-          !element.hasAttributeNS(sldNs, 'lx')) ||
-        (element.localName === 'Private' &&
-          element.getAttribute('type') === 'OpenSCD-Linked-IEDs' &&
-          !element.firstElementChild!.hasAttributeNS(sldNs, 'lx'))
+        element.localName === 'IEDName' &&
+        !element.hasAttributeNS(sldNs, 'lx')
       ) {
-        lx += 2;
-        ly += 2;
+        lx += 1;
+        ly += 1;
       }
 
       edits.push({
-        element:
-          element.localName === 'Private' &&
-          element.getAttribute('type') === 'OpenSCD-Linked-IEDs'
-            ? element.firstElementChild!
-            : element,
+        element,
         attributes: {
           x: { namespaceURI: sldNs, value: x.toString() },
           y: { namespaceURI: sldNs, value: y.toString() },
@@ -839,7 +802,7 @@ export default class Designer extends LitElement {
                       const name = selectedListItem.dataset.name!;
                       selectedListItem.selected = false;
 
-                      const element = makeOrGetIed(name, this.doc);
+                      const element = this.insertOrGetIed(name, this.doc);
                       this.iedMenu!.close();
 
                       this.startPlacing(element);
@@ -1206,6 +1169,27 @@ export default class Designer extends LitElement {
           close
         </mwc-button>
       </mwc-dialog>`}`;
+  }
+
+  insertOrGetIed(name: string, doc: XMLDocument): Element {
+    const linkedIed = Array.from(
+      doc
+        .querySelector(':root > Substation')!
+        .getElementsByTagNameNS(sldNs, 'IEDName') ?? []
+    ).find(
+      lIed => lIed.getAttributeNS(sldNs, 'name') === name
+      // &&
+      // lIed.parentElement?.tagName === 'Private'
+    );
+
+    if (linkedIed) return linkedIed;
+
+    const newLinkedIed = doc.createElementNS(sldNs, `${this.nsp}:IEDName`);
+    newLinkedIed.setAttributeNS(sldNs, `name`, name);
+    // TODO: I think we should set the attribute as `${this.nsp}:name`
+    // but this breaks everything and I don't know why
+
+    return newLinkedIed;
   }
 
   insertSubstation() {

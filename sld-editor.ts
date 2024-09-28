@@ -83,7 +83,6 @@ const parentTags: Partial<Record<string, string[]>> = {
   Bay: ['VoltageLevel'],
   VoltageLevel: ['Substation'],
   PowerTransformer: ['Bay', 'VoltageLevel', 'Substation'],
-  Private: ['Bay', 'VoltageLevel', 'Substation'],
   IEDName: ['Bay', 'VoltageLevel', 'Substation'],
 };
 
@@ -351,10 +350,10 @@ function renderMenuHeader(element: Element) {
 }
 
 function removeIedSld(linkedIed: Element): Remove {
-  const sclPrivate = linkedIed.parentElement!;
-  if (sclPrivate.childElementCount === 1) {
-    return { node: sclPrivate };
-  }
+  // if linkedIed.parentElement!.tagName === 'Private' && linkedIed.parentElement?.getAttribute('');
+  // if (sclPrivate.childElementCount === 1) {
+  //   return { node: sclPrivate };
+  // }
   return { node: linkedIed };
 }
 
@@ -1716,10 +1715,8 @@ export class SLDEditor extends LitElement {
         : nothing;
 
     const iedPlacingTarget =
-      (this.placing?.localName === 'IEDName' &&
-        this.placing.namespaceURI === sldNs) ||
-      (this.placing?.localName === 'Private' &&
-        this.placing?.getAttribute('type') === 'OpenSCD-Linked-IEDs')
+      this.placing?.localName === 'IEDName' &&
+      this.placing.namespaceURI === sldNs
         ? svg`<rect width="100%" height="100%" fill="url(#grid)" />`
         : nothing;
 
@@ -1740,10 +1737,8 @@ export class SLDEditor extends LitElement {
       else if (this.placing.tagName === 'ConductingEquipment')
         placingElement = this.renderEquipment(this.placing, { preview: true });
       else if (
-        (this.placing.localName === 'IEDName' &&
-          this.placing.namespaceURI === sldNs) ||
-        (this.placing.tagName === 'Private' &&
-          this.placing.getAttribute('type') === 'OpenSCD-Linked-IEDs')
+        this.placing.localName === 'IEDName' &&
+        this.placing.namespaceURI === sldNs
       )
         placingElement = this.renderIed(this.placing, { preview: true });
       else if (this.placing.tagName === 'PowerTransformer')
@@ -2994,39 +2989,14 @@ export class SLDEditor extends LitElement {
     }</g>`;
   }
 
-  renderIed(
-    linkedIedOrPrivate: Element,
-    { preview = false } = {}
-  ): SVGTemplateResult {
+  renderIed(linkedIed: Element, { preview = false } = {}): SVGTemplateResult {
     if (!this.showIeds) return svg``;
-    console.log('renderIed');
-
-    let linkedIed = linkedIedOrPrivate;
-    if (linkedIedOrPrivate.tagName === 'Private') {
-      const firstLinkedIed = linkedIedOrPrivate
-        .getElementsByTagNameNS(sldNs, 'IEDName')
-        .item(0);
-      if (firstLinkedIed) linkedIed = firstLinkedIed;
-    }
 
     const sclIed = this.doc.querySelector(
       `:root > IED[name="${linkedIed.getAttribute('name') ?? 'Unknown IED'}"`
     );
 
-    // const linkedSubstation = linkedIed.closest('Substation');
-    // const inCurrentSubstation = linkedSubstation !== this.substation;
-    // const hasIedAndCoords = sclIed
-    // && linkedIed.getAttributeNS(sldNs, 'x');
-
-    // inCurrentSubstation && && !preview
     if (!sclIed) return svg``;
-
-    const placingPrivateOrLinkedIed =
-      this.placing === linkedIed || this.placing === linkedIed.parentElement;
-
-    // if (!inCurrentSubstation && !preview) return svg``;
-
-    // if (this.placing === linkedIed && !preview) return svg``;
 
     const [x, y] = this.renderedPosition(linkedIed);
 
@@ -3034,9 +3004,8 @@ export class SLDEditor extends LitElement {
       this.dispatchEvent(newStartPlaceEvent(linkedIed));
     };
 
-    if (placingPrivateOrLinkedIed && this.canPlaceAt(linkedIed, x, y, 1, 1))
+    if (this.placing === linkedIed && this.canPlaceAt(linkedIed, x, y, 1, 1))
       handleClick = () => {
-        // if (placingPrivateOrLinkedIed && this.placing === linkedIed && this.canPlaceAt(linkedIed, x, y, 1, 1)) handleClick = () => {
         const parent =
           Array.from(
             this.substation.querySelectorAll(':scope > VoltageLevel > Bay')
@@ -3060,11 +3029,11 @@ export class SLDEditor extends LitElement {
         );
       };
 
-    const clickthrough = !this.idle && !placingPrivateOrLinkedIed;
+    const clickthrough = !this.idle && !(this.placing === linkedIed);
 
     return svg`<g class="${classMap({
       ied: true,
-      preview: placingPrivateOrLinkedIed,
+      preview: this.placing === linkedIed,
     })}"
     id="${
       linkedIed.closest('Substation') === this.substation
