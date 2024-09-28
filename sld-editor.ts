@@ -46,10 +46,8 @@ import {
   connectionStartPoints,
   contains,
   elementPath,
-  hasIedCoordinates,
   isBusBar,
   isEqType,
-  isIed,
   newConnectEvent,
   newPlaceEvent,
   newPlaceLabelEvent,
@@ -560,7 +558,10 @@ export class SLDEditor extends LitElement {
 
     // offset IED labels to right adjacent of symbol during placing
     const [offsetX, offsetY] =
-      isIed(element) && !hasIedCoordinates(element) && preview
+      element.localName === 'IEDName' &&
+      element.namespaceURI === sldNs &&
+      !element.hasAttributeNS(sldNs, 'x') &&
+      preview
         ? [-1, -1]
         : this.placingOffset;
 
@@ -1969,7 +1970,13 @@ export class SLDEditor extends LitElement {
           this.doc
             .querySelector(':root > Substation')
             ?.getElementsByTagNameNS(sldNs, 'IEDName') ?? []
-        ).map(ied => this.renderIed(ied))}
+        )
+          .filter(
+            linkedIed =>
+              linkedIed.parentElement?.tagName === 'Private' &&
+              linkedIed.parentElement?.parentElement?.tagName === 'Substation'
+          )
+          .map(ied => this.renderIed(ied))}
         ${Array.from(
           this.substation.querySelectorAll(
             'VoltageLevel, Bay, ConductingEquipment, PowerTransformer, Text'
@@ -2311,6 +2318,19 @@ export class SLDEditor extends LitElement {
       ${Array.from(bayOrVL.children)
         .filter(child => child.tagName === 'PowerTransformer')
         .map(equipment => this.renderPowerTransformer(equipment))}
+      ${Array.from(bayOrVL.children)
+        .filter(child => child.tagName === 'PowerTransformer')
+        .map(equipment => this.renderPowerTransformer(equipment))}
+      ${Array.from(bayOrVL.children)
+        .filter(child => child.tagName === 'PowerTransformer')
+        .map(equipment => this.renderPowerTransformer(equipment))}
+      ${Array.from(bayOrVL.getElementsByTagNameNS(sldNs, 'IEDName'))
+        .filter(
+          linkedIed =>
+            linkedIed.parentElement?.tagName === 'Private' &&
+            linkedIed.parentElement!.parentElement === bayOrVL
+        )
+        .map(linkedIed => this.renderIed(linkedIed))}
       ${
         preview
           ? Array.from(bayOrVL.querySelectorAll('ConnectivityNode'))
@@ -2329,10 +2349,10 @@ export class SLDEditor extends LitElement {
               .concat(
                 this.showIeds
                   ? Array.from(
-                      this.substation.getElementsByTagNameNS(sldNs, 'IEDName')
+                      bayOrVL.getElementsByTagNameNS(sldNs, 'IEDName')
                     ).filter(
                       linkedIed =>
-                        linkedIed.parentElement === bayOrVL ||
+                        linkedIed.parentElement?.tagName === 'Private' &&
                         linkedIed.parentElement?.parentElement === bayOrVL
                     )
                   : []
@@ -2956,6 +2976,7 @@ export class SLDEditor extends LitElement {
   }
 
   renderIed(linkedIed: Element, { preview = false } = {}): SVGTemplateResult {
+    // TODO: If IEDs are not shown, movement of outer containers will not be correctly managed
     if (!this.showIeds) return svg``;
 
     const sclIed = this.doc.querySelector(

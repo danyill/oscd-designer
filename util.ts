@@ -443,26 +443,6 @@ export function contains([x1, y1, w1, h1]: Rect, [x2, y2, w2, h2]: Rect) {
   return x1 <= x2 && y1 <= y2 && x1 + w1 >= x2 + w2 && y1 + h1 >= y2 + h2;
 }
 
-export function isIed(element: Element): boolean {
-  return element.localName === 'IEDName' && element.namespaceURI === sldNs;
-}
-
-export function hasIedCoordinates(element: Element): boolean {
-  return (
-    element.localName === 'IEDName' &&
-    element.namespaceURI === sldNs &&
-    element.hasAttributeNS(sldNs, 'x')
-  );
-}
-
-export function hasIedLabelCoordinates(element: Element): boolean {
-  return (
-    element.localName === 'IEDName' &&
-    element.namespaceURI === sldNs &&
-    element.hasAttributeNS(sldNs, 'lx')
-  );
-}
-
 export type ResizeDetail = {
   w: number;
   h: number;
