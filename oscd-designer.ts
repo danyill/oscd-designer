@@ -261,6 +261,7 @@ export default class Designer extends LitElement {
   }
 
   updated(changedProperties: Map<string, any>) {
+    // TODO: Is there a more elegant way to do this?
     if (this.iedMenu) this.iedMenu.anchor = this.addIed as HTMLElement;
 
     if (!changedProperties.has('doc')) return;
@@ -549,7 +550,55 @@ export default class Designer extends LitElement {
       }
     }
 
+    const oldParent = element.parentElement;
+
     this.dispatchEvent(newEditEvent(edits));
+
+    // wrap IEDName elements within Private element if required
+    if (
+      element.localName === 'IEDName' &&
+      element.namespaceURI === sldNs &&
+      element.parentElement?.tagName !== 'Private'
+    ) {
+      let privateElement: Element | null = element.parentElement!.querySelector(
+        'Private[type="OpenSCD-Linked-IEDs"]'
+      );
+
+      if (!privateElement) {
+        privateElement = this.doc.createElementNS(
+          this.doc.documentElement.namespaceURI,
+          'Private'
+        );
+        privateElement.setAttribute('type', 'OpenSCD-Linked-IEDs');
+      }
+
+      privateElement.appendChild(element.cloneNode());
+
+      const enclosingEdits = [
+        {
+          parent: element.parentElement!,
+          node: privateElement,
+          reference: element.parentElement
+            ? getReference(element.parentElement!, 'Private')
+            : null,
+        },
+        { node: element },
+      ];
+
+      // TODO: In next API release, dispatch with "squash" to support undo/redo
+      this.dispatchEvent(newEditEvent(enclosingEdits));
+    }
+
+    // remove empty Private element if required
+    if (
+      oldParent?.tagName === 'Private' &&
+      oldParent?.getAttribute('type') === 'OpenSCD-Linked-IEDs' &&
+      oldParent.childElementCount === 0
+    ) {
+      // TODO: In next API release, dispatch with "squash" to support undo/redo
+      this.dispatchEvent(newEditEvent({ node: oldParent }));
+    }
+
     if (
       ['Bay', 'VoltageLevel'].includes(element.tagName) &&
       (!element.hasAttributeNS(sldNs, 'w') ||

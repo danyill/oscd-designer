@@ -527,23 +527,6 @@ export class SLDEditor extends LitElement {
     });
     if (lostChild) return false;
 
-    // if (['Bay', 'VoltageLevel', 'Substation'].includes(element.tagName)) {
-    //   const iedsInContainer = Array.from(
-    //     element.getElementsByTagNameNS(sldNs, 'IEDName')
-    //   );
-
-    //   if (iedsInContainer) {
-    //     const lostIed = iedsInContainer.find(ied => {
-    //       const {
-    //         pos: [cx, cy],
-    //         dim: [cw, ch],
-    //       } = attributes(ied);
-    //       return !contains([x, y, w, h], [cx, cy, cw, ch]);
-    //     });
-    //     if (lostIed) return false;
-    //   }
-    // }
-
     return true;
   }
 
@@ -566,23 +549,6 @@ export class SLDEditor extends LitElement {
       return !contains([x, y, w, h], [cx, cy, cw, ch]);
     });
     if (lostChild) return false;
-
-    if (['Bay', 'VoltageLevel', 'Substation'].includes(element.tagName)) {
-      const iedsInContainer = Array.from(
-        element.getElementsByTagNameNS(sldNs, 'IEDName')
-      );
-
-      if (iedsInContainer) {
-        const lostIed = iedsInContainer.find(ied => {
-          const {
-            pos: [cx, cy],
-            dim: [cw, ch],
-          } = attributes(ied);
-          return !contains([x, y, w, h], [cx, cy, cw, ch]);
-        });
-        if (lostIed) return false;
-      }
-    }
 
     return true;
   }
@@ -1455,10 +1421,6 @@ export class SLDEditor extends LitElement {
             if (cNode && cNode.closest(bayOrVL.tagName) !== bayOrVL)
               edits.push(...removeNode(cNode));
           });
-          // TODO: FIXME
-          // containedIEDs(bayOrVL).forEach(ied => {
-          //   edits.push(removeIedSld(ied, this.nsp));
-          // });
 
           edits.push({ node: bayOrVL });
           this.dispatchEvent(newEditEvent(edits));
@@ -2368,6 +2330,10 @@ export class SLDEditor extends LitElement {
                 this.showIeds
                   ? Array.from(
                       this.substation.getElementsByTagNameNS(sldNs, 'IEDName')
+                    ).filter(
+                      linkedIed =>
+                        linkedIed.parentElement === bayOrVL ||
+                        linkedIed.parentElement?.parentElement === bayOrVL
                     )
                   : []
               )
@@ -3022,8 +2988,7 @@ export class SLDEditor extends LitElement {
           newPlaceEvent({
             x,
             y,
-            element:
-              this.placing === linkedIed ? linkedIed : linkedIed.parentElement!,
+            element: linkedIed,
             parent,
           })
         );
