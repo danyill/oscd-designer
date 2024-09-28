@@ -79,6 +79,36 @@ function makeBusBar(doc: XMLDocument, nsp: string) {
   return busBar;
 }
 
+function makeOrGetIed(name: string, doc: XMLDocument): Element {
+  const linkedIed = Array.from(
+    doc
+      .querySelector(':root > Substation')!
+      .getElementsByTagNameNS(sldNs, 'IEDName') ?? []
+  ).find(
+    lIed =>
+      lIed.getAttributeNS(sldNs, 'name') === name &&
+      lIed.parentElement?.tagName === 'Private'
+  );
+
+  if (linkedIed) return linkedIed;
+
+  let sclPrivate = doc.querySelector(
+    ':root > Substation Private[type="OpenSCD-Linked-IEDs"]'
+  );
+  if (!sclPrivate) {
+    sclPrivate = doc.createElementNS(
+      doc.documentElement.namespaceURI,
+      'Private'
+    );
+    sclPrivate.setAttribute('type', 'OpenSCD-Linked-IEDs');
+  }
+
+  const newLinkedIed = doc.createElementNS(sldNs, 'esld:IEDName');
+  newLinkedIed.setAttributeNS(sldNs, 'name', name);
+  sclPrivate.appendChild(newLinkedIed);
+  return sclPrivate;
+}
+
 function cutSectionAt(
   section: Element,
   index: number,
@@ -368,35 +398,23 @@ export default class Designer extends LitElement {
           element.getAttribute('type') === 'OpenSCD-Linked-IEDs' &&
           !element.firstElementChild!.hasAttributeNS(sldNs, 'lx'))
       ) {
-        lx += 1;
-        ly += 1;
+        lx += 2;
+        ly += 2;
       }
 
-      if (
-        // element.localName === 'IEDName' ||
-        element.localName === 'Private' &&
-        element.getAttribute('type') === 'OpenSCD-Linked-IEDs'
-      ) {
-        edits.push({
-          element: element.firstElementChild!,
-          attributes: {
-            x: { namespaceURI: sldNs, value: x.toString() },
-            y: { namespaceURI: sldNs, value: y.toString() },
-            lx: { namespaceURI: sldNs, value: (lx + dx).toString() },
-            ly: { namespaceURI: sldNs, value: (ly + dy).toString() },
-          },
-        });
-      } else {
-        edits.push({
-          element,
-          attributes: {
-            x: { namespaceURI: sldNs, value: x.toString() },
-            y: { namespaceURI: sldNs, value: y.toString() },
-            lx: { namespaceURI: sldNs, value: (lx + dx).toString() },
-            ly: { namespaceURI: sldNs, value: (ly + dy).toString() },
-          },
-        });
-      }
+      edits.push({
+        element:
+          element.localName === 'Private' &&
+          element.getAttribute('type') === 'OpenSCD-Linked-IEDs'
+            ? element.firstElementChild!
+            : element,
+        attributes: {
+          x: { namespaceURI: sldNs, value: x.toString() },
+          y: { namespaceURI: sldNs, value: y.toString() },
+          lx: { namespaceURI: sldNs, value: (lx + dx).toString() },
+          ly: { namespaceURI: sldNs, value: (ly + dy).toString() },
+        },
+      });
     }
 
     Array.from(element.querySelectorAll('Text')).forEach(text => {
@@ -423,30 +441,32 @@ export default class Designer extends LitElement {
       element.querySelectorAll(
         'VoltageLevel, Bay, ConductingEquipment, PowerTransformer, Vertex'
       )
-    ).forEach(descendant => {
-      const {
-        pos: [descX, descY],
-        label: [descLX, descLY],
-      } = attributes(descendant);
-      const newAttributes: Update['attributes'] = {
-        x: { namespaceURI: sldNs, value: (descX + dx).toString() },
-        y: { namespaceURI: sldNs, value: (descY + dy).toString() },
-      };
-      if (descendant.localName !== 'Vertex') {
-        newAttributes.lx = {
-          namespaceURI: sldNs,
-          value: (descLX + dx).toString(),
+    )
+      .concat(Array.from(element.getElementsByTagNameNS(sldNs, 'IEDName')))
+      .forEach(descendant => {
+        const {
+          pos: [descX, descY],
+          label: [descLX, descLY],
+        } = attributes(descendant);
+        const newAttributes: Update['attributes'] = {
+          x: { namespaceURI: sldNs, value: (descX + dx).toString() },
+          y: { namespaceURI: sldNs, value: (descY + dy).toString() },
         };
-        newAttributes.ly = {
-          namespaceURI: sldNs,
-          value: (descLY + dy).toString(),
-        };
-      }
-      edits.push({
-        element: descendant,
-        attributes: newAttributes,
+        if (descendant.localName !== 'Vertex') {
+          newAttributes.lx = {
+            namespaceURI: sldNs,
+            value: (descLX + dx).toString(),
+          };
+          newAttributes.ly = {
+            namespaceURI: sldNs,
+            value: (descLY + dy).toString(),
+          };
+        }
+        edits.push({
+          element: descendant,
+          attributes: newAttributes,
+        });
       });
-    });
 
     if (
       element.tagName === 'ConductingEquipment' ||
@@ -811,48 +831,18 @@ export default class Designer extends LitElement {
                     corner="BOTTOM_RIGHT"
                     menuCorner="END"
                     id="iedMenu"
-                    .anchor=${this.addIed}
                     @selected=${(ev: SingleSelectedEvent) => {
                       const selectedListItem = (ev.target as List)
                         .selected! as ListItem;
                       if (!selectedListItem) return;
+
                       const name = selectedListItem.dataset.name!;
-                      // const ied = this.doc.querySelector(
-                      //   `:root > IED[name="${name}"]`
-                      // )!;
-                      this.iedMenu!.close();
                       selectedListItem.selected = false;
-                      // ***
-                      // search for existing
 
-                      // else create new
-                      const sclPrivate = this.doc.createElementNS(
-                        this.doc.documentElement.namespaceURI,
-                        'Private'
-                      );
-                      sclPrivate.setAttribute('type', 'OpenSCD-Linked-IEDs');
-                      const linkedIed = this.doc.createElementNS(
-                        sldNs,
-                        'esld:IEDName'
-                      );
-                      linkedIed.setAttributeNS(sldNs, 'name', name);
-                      sclPrivate.appendChild(linkedIed);
+                      const element = makeOrGetIed(name, this.doc);
+                      this.iedMenu!.close();
 
-                      const firstSubstation =
-                        this.doc.querySelector(':root > Substation')!;
-                      const reference = getReference(
-                        firstSubstation,
-                        'Private'
-                      );
-                      this.dispatchEvent(
-                        newEditEvent({
-                          parent: firstSubstation,
-                          node: sclPrivate,
-                          reference,
-                        })
-                      );
-
-                      this.startPlacing(sclPrivate);
+                      this.startPlacing(element);
                     }}
                   >
                     ${Array.from(this.doc.querySelectorAll(':root > IED'))

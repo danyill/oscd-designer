@@ -44,11 +44,12 @@ import {
 import {
   attributes,
   connectionStartPoints,
-  containedIEDs,
   contains,
   elementPath,
+  hasIedCoordinates,
   isBusBar,
   isEqType,
+  isIed,
   newConnectEvent,
   newPlaceEvent,
   newPlaceLabelEvent,
@@ -474,17 +475,15 @@ export class SLDEditor extends LitElement {
   canPlaceAt(element: Element, x: number, y: number, w: number, h: number) {
     if (
       element.tagName === 'Substation' ||
-      (element.localName === 'IEDName' && element.namespaceURI === sldNs) ||
-      (element.tagName === 'Private' &&
-        element.getAttribute('type') === 'OpenSCD-Linked-IEDs')
+      (element.localName === 'IEDName' && element.namespaceURI === sldNs)
     )
       return true;
 
     const overlappingSibling = Array.from(
-      this.substation.querySelectorAll(`${element.tagName}, PowerTransformer`)
+      this.substation.querySelectorAll(`${element.localName}, PowerTransformer`)
     ).find(
       sibling =>
-        sibling.closest(element.tagName) !== element &&
+        sibling.closest(element.localName) !== element &&
         overlapsRect(sibling, x, y, w, h) &&
         !isBusBar(sibling)
     );
@@ -529,20 +528,22 @@ export class SLDEditor extends LitElement {
     });
     if (lostChild) return false;
 
-    if (['Bay', 'VoltageLevel', 'Substation'].includes(element.tagName)) {
-      const iedsInContaner = containedIEDs(element);
+    // if (['Bay', 'VoltageLevel', 'Substation'].includes(element.tagName)) {
+    //   const iedsInContainer = Array.from(
+    //     element.getElementsByTagNameNS(sldNs, 'IEDName')
+    //   );
 
-      if (iedsInContaner) {
-        const lostIed = iedsInContaner.find(ied => {
-          const {
-            pos: [cx, cy],
-            dim: [cw, ch],
-          } = attributes(ied);
-          return !contains([x, y, w, h], [cx, cy, cw, ch]);
-        });
-        if (lostIed) return false;
-      }
-    }
+    //   if (iedsInContainer) {
+    //     const lostIed = iedsInContainer.find(ied => {
+    //       const {
+    //         pos: [cx, cy],
+    //         dim: [cw, ch],
+    //       } = attributes(ied);
+    //       return !contains([x, y, w, h], [cx, cy, cw, ch]);
+    //     });
+    //     if (lostIed) return false;
+    //   }
+    // }
 
     return true;
   }
@@ -568,10 +569,12 @@ export class SLDEditor extends LitElement {
     if (lostChild) return false;
 
     if (['Bay', 'VoltageLevel', 'Substation'].includes(element.tagName)) {
-      const iedsInContaner = containedIEDs(element);
+      const iedsInContainer = Array.from(
+        element.getElementsByTagNameNS(sldNs, 'IEDName')
+      );
 
-      if (iedsInContaner) {
-        const lostIed = iedsInContaner.find(ied => {
+      if (iedsInContainer) {
+        const lostIed = iedsInContainer.find(ied => {
           const {
             pos: [cx, cy],
             dim: [cw, ch],
@@ -585,17 +588,22 @@ export class SLDEditor extends LitElement {
     return true;
   }
 
-  renderedLabelPosition(element: Element): Point {
+  renderedLabelPosition(element: Element, { preview = false }): Point {
     let {
       label: [x, y],
     } = attributes(element);
-    const [offsetX, offsetY] = this.placingOffset;
+
+    // offset IED labels to right adjacent of symbol during placing
+    const [offsetX, offsetY] =
+      isIed(element) && !hasIedCoordinates(element) && preview
+        ? [-1, -1]
+        : this.placingOffset;
+
     if (
       (this.placing &&
         element.closest(this.placing.localName) === this.placing) ||
       (['VoltageLevel', 'Bay'].includes(`${this.placing?.tagName}`) &&
-        this.placing &&
-        containedIEDs(this.placing).includes(element))
+        this.placing)
     ) {
       const {
         pos: [parentX, parentY],
@@ -628,8 +636,7 @@ export class SLDEditor extends LitElement {
       (this.placing &&
         element.closest(this.placing.localName) === this.placing) ||
       (['VoltageLevel', 'Bay'].includes(`${this.placing?.tagName}`) &&
-        this.placing &&
-        containedIEDs(this.placing).includes(element))
+        this.placing)
     ) {
       const {
         pos: [parentX, parentY],
@@ -1709,8 +1716,10 @@ export class SLDEditor extends LitElement {
         : nothing;
 
     const iedPlacingTarget =
-      this.placing?.tagName === 'IEDName' &&
-      this.placing?.namespaceURI === sldNs
+      (this.placing?.localName === 'IEDName' &&
+        this.placing.namespaceURI === sldNs) ||
+      (this.placing?.localName === 'Private' &&
+        this.placing?.getAttribute('type') === 'OpenSCD-Linked-IEDs')
         ? svg`<rect width="100%" height="100%" fill="url(#grid)" />`
         : nothing;
 
@@ -1718,7 +1727,7 @@ export class SLDEditor extends LitElement {
       ? svg`<rect width="100%" height="100%" fill="url(#halfgrid)"
       @click=${() => {
         const element = this.placingLabel!;
-        const [x, y] = this.renderedLabelPosition(element);
+        const [x, y] = this.renderedLabelPosition(element, { preview: true });
         this.dispatchEvent(newPlaceLabelEvent({ element, x, y }));
       }}
       />`
@@ -2009,6 +2018,13 @@ export class SLDEditor extends LitElement {
             'VoltageLevel, Bay, ConductingEquipment, PowerTransformer, Text'
           )
         )
+          .concat(
+            this.showIeds
+              ? Array.from(
+                  this.substation.getElementsByTagNameNS(sldNs, 'IEDName')
+                )
+              : []
+          )
           .filter(
             e =>
               !this.placing ||
@@ -2108,7 +2124,7 @@ export class SLDEditor extends LitElement {
     </section>`;
   }
 
-  renderLabel(element: Element) {
+  renderLabel(element: Element, { preview = false } = {}) {
     if (!this.showLabels) return nothing;
 
     let deg = 0;
@@ -2116,7 +2132,7 @@ export class SLDEditor extends LitElement {
       element.getAttribute('name');
     let weight = 400;
     let color = 'black';
-    const [x, y] = this.renderedLabelPosition(element);
+    const [x, y] = this.renderedLabelPosition(element, { preview });
 
     if (element.tagName === 'Text') {
       ({ weight, color } = attributes(element));
@@ -2165,7 +2181,13 @@ export class SLDEditor extends LitElement {
           @auxclick=${(e: MouseEvent) => {
             if (e.button === 1) {
               // middle mouse button
-              this.dispatchEvent(newEditWizardEvent(element));
+              if (element.localName !== 'IEDName') {
+                this.dispatchEvent(newEditWizardEvent(element));
+              } else {
+                const iedName = element.getAttributeNS(sldNs, 'name');
+                const ied = this.doc.querySelector(`IED[name="${iedName}"]`);
+                if (ied) this.dispatchEvent(newEditWizardEvent(ied));
+              }
               e.preventDefault();
             }
           }}
@@ -2297,21 +2319,6 @@ export class SLDEditor extends LitElement {
       this.resizingBR !== bayOrVL &&
       this.resizingTL !== bayOrVL;
 
-    // avoid duplication of IEDs in boths VoltageLevel and Bays
-    // let containedIeds: Element[] = [];
-    // if (preview) {
-    //   if (isVL) {
-    //     const iedsInBays = Array.from(bayOrVL.children)
-    //       .filter(isBay)
-    //       .flatMap(bay => containedIEDs(bay));
-    //     containedIeds = containedIEDs(bayOrVL).filter(
-    //       ied => !iedsInBays.includes(ied)
-    //     );
-    //   } else {
-    //     containedIeds = containedIEDs(bayOrVL);
-    //   }
-    // }
-
     return svg`<g id="${
       bayOrVL.closest('Substation') === this.substation
         ? identity(bayOrVL)
@@ -2362,8 +2369,14 @@ export class SLDEditor extends LitElement {
               )
             )
               .concat(bayOrVL)
-              // concat some IEDs
-              .map(element => this.renderLabel(element))
+              .concat(
+                this.showIeds
+                  ? Array.from(
+                      this.substation.getElementsByTagNameNS(sldNs, 'IEDName')
+                    )
+                  : []
+              )
+              .map(element => this.renderLabel(element, { preview: true }))
           : nothing
       }
       ${resizeTLhandle}
@@ -2972,7 +2985,7 @@ export class SLDEditor extends LitElement {
     <g class="preview">${
       preview
         ? [
-            this.renderLabel(equipment),
+            this.renderLabel(equipment, { preview }),
             ...Array.from(equipment.querySelectorAll('Text')).map(text =>
               this.renderLabel(text)
             ),
@@ -2981,9 +2994,20 @@ export class SLDEditor extends LitElement {
     }</g>`;
   }
 
-  renderIed(linkedIed: Element, { preview = false } = {}): SVGTemplateResult {
+  renderIed(
+    linkedIedOrPrivate: Element,
+    { preview = false } = {}
+  ): SVGTemplateResult {
     if (!this.showIeds) return svg``;
     console.log('renderIed');
+
+    let linkedIed = linkedIedOrPrivate;
+    if (linkedIedOrPrivate.tagName === 'Private') {
+      const firstLinkedIed = linkedIedOrPrivate
+        .getElementsByTagNameNS(sldNs, 'IEDName')
+        .item(0);
+      if (firstLinkedIed) linkedIed = firstLinkedIed;
+    }
 
     const sclIed = this.doc.querySelector(
       `:root > IED[name="${linkedIed.getAttribute('name') ?? 'Unknown IED'}"`
@@ -3010,23 +3034,31 @@ export class SLDEditor extends LitElement {
       this.dispatchEvent(newStartPlaceEvent(linkedIed));
     };
 
-    if (placingPrivateOrLinkedIed) {
-      const parent = this.substation;
-      if (parent && this.canPlaceAt(linkedIed, x, y, 1, 1))
-        handleClick = () => {
-          this.dispatchEvent(
-            newPlaceEvent({
-              x,
-              y,
-              element:
-                this.placing === linkedIed
-                  ? linkedIed
-                  : linkedIed.parentElement!,
-              parent,
-            })
-          );
-        };
-    }
+    if (placingPrivateOrLinkedIed && this.canPlaceAt(linkedIed, x, y, 1, 1))
+      handleClick = () => {
+        // if (placingPrivateOrLinkedIed && this.placing === linkedIed && this.canPlaceAt(linkedIed, x, y, 1, 1)) handleClick = () => {
+        const parent =
+          Array.from(
+            this.substation.querySelectorAll(':scope > VoltageLevel > Bay')
+          )
+            .concat(
+              Array.from(
+                this.substation.querySelectorAll(':scope > VoltageLevel')
+              )
+            )
+            .find(vlOrBay => containsRect(vlOrBay, x, y, 1, 1)) ||
+          this.substation;
+
+        this.dispatchEvent(
+          newPlaceEvent({
+            x,
+            y,
+            element:
+              this.placing === linkedIed ? linkedIed : linkedIed.parentElement!,
+            parent,
+          })
+        );
+      };
 
     const clickthrough = !this.idle && !placingPrivateOrLinkedIed;
 
@@ -3060,7 +3092,7 @@ export class SLDEditor extends LitElement {
     <g class="preview">${
       preview
         ? [
-            this.renderLabel(linkedIed),
+            this.renderLabel(linkedIed, { preview }),
             sclIed.querySelector('Text')
               ? this.renderLabel(sclIed.querySelector('Text')!)
               : nothing,

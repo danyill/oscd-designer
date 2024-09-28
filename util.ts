@@ -443,23 +443,34 @@ export function contains([x1, y1, w1, h1]: Rect, [x2, y2, w2, h2]: Rect) {
   return x1 <= x2 && y1 <= y2 && x1 + w1 >= x2 + w2 && y1 + h1 >= y2 + h2;
 }
 
-export function containedIEDs(element: Element): Element[] {
-  const {
-    pos: [x, y],
-    dim: [w, h],
-  } = attributes(element);
+export function isIed(element: Element): boolean {
+  return (
+    (element.localName === 'IEDName' && element.namespaceURI === sldNs) ||
+    (element.tagName === 'Private' &&
+      element.getAttribute('type') === 'OpenSCD-Linked-IEDs')
+  );
+}
 
-  const doc = element.ownerDocument;
+export function hasIedCoordinates(element: Element): boolean {
+  return (
+    (element.localName === 'IEDName' &&
+      element.namespaceURI === sldNs &&
+      element.hasAttributeNS(sldNs, 'x')) ||
+    (element.tagName === 'Private' &&
+      element.getAttribute('type') === 'OpenSCD-Linked-IEDs' &&
+      (element.firstElementChild?.hasAttributeNS(sldNs, 'x') ?? false))
+  );
+}
 
-  return Array.from(doc.querySelectorAll(':root > IED')).filter(ied => {
-    const name = element.closest('Substation')?.getAttribute('name');
-    if (!(ied.getAttributeNS(sldNs, 'substation') === name)) return false;
-    const {
-      pos: [cx, cy],
-      dim: [cw, ch],
-    } = attributes(ied);
-    return contains([x, y, w, h], [cx, cy, cw, ch]);
-  });
+export function hasIedLabelCoordinates(element: Element): boolean {
+  return (
+    (element.localName === 'IEDName' &&
+      element.namespaceURI === sldNs &&
+      element.hasAttributeNS(sldNs, 'lx')) ||
+    (element.tagName === 'Private' &&
+      element.getAttribute('type') === 'OpenSCD-Linked-IEDs' &&
+      (element.firstElementChild?.hasAttributeNS(sldNs, 'lx') ?? false))
+  );
 }
 
 export type ResizeDetail = {
