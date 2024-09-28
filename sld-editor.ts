@@ -1974,7 +1974,10 @@ export class SLDEditor extends LitElement {
           .filter(
             linkedIed =>
               linkedIed.parentElement?.tagName === 'Private' &&
-              linkedIed.parentElement?.parentElement?.tagName === 'Substation'
+              !(
+                this.placing &&
+                linkedIed.closest(this.placing.localName) === this.placing
+              )
           )
           .map(ied => this.renderIed(ied))}
         ${Array.from(
@@ -2167,6 +2170,7 @@ export class SLDEditor extends LitElement {
 
   renderContainer(bayOrVL: Element, preview = false): TemplateResult<2> {
     const isVL = bayOrVL.tagName === 'VoltageLevel';
+    // only render containers while placing
     if (this.placing === bayOrVL && !preview) return svg``;
 
     let [x, y] = this.renderedPosition(bayOrVL);
@@ -2330,7 +2334,7 @@ export class SLDEditor extends LitElement {
             linkedIed.parentElement?.tagName === 'Private' &&
             linkedIed.parentElement!.parentElement === bayOrVL
         )
-        .map(linkedIed => this.renderIed(linkedIed))}
+        .map(linkedIed => this.renderIed(linkedIed, { preview: true }))}
       ${
         preview
           ? Array.from(bayOrVL.querySelectorAll('ConnectivityNode'))
@@ -2977,7 +2981,8 @@ export class SLDEditor extends LitElement {
 
   renderIed(linkedIed: Element, { preview = false } = {}): SVGTemplateResult {
     // TODO: If IEDs are not shown, movement of outer containers will not be correctly managed
-    if (!this.showIeds) return svg``;
+    if (!this.showIeds || (this.placing === linkedIed && !preview))
+      return svg``;
 
     const sclIed = this.doc.querySelector(
       `:root > IED[name="${linkedIed.getAttribute('name') ?? 'Unknown IED'}"`

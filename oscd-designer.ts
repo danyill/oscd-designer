@@ -591,6 +591,7 @@ export default class Designer extends LitElement {
 
     // remove empty Private element if required
     if (
+      element.localName === 'IEDName' &&
       oldParent?.tagName === 'Private' &&
       oldParent?.getAttribute('type') === 'OpenSCD-Linked-IEDs' &&
       oldParent.childElementCount === 0
