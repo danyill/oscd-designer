@@ -2319,7 +2319,7 @@ export class SLDEditor extends LitElement {
             linkedIed.parentElement?.tagName === 'Private' &&
             linkedIed.parentElement!.parentElement === bayOrVL
         )
-        .map(linkedIed => this.renderIed(linkedIed, { preview: true }))}
+        .map(linkedIed => this.renderIed(linkedIed, { preview }))}
       ${
         preview
           ? Array.from(bayOrVL.querySelectorAll('ConnectivityNode'))
@@ -3007,7 +3007,7 @@ export class SLDEditor extends LitElement {
         );
       };
 
-    const clickthrough = !this.idle && !(this.placing === linkedIed);
+    const clickthrough = !this.idle && this.placing !== linkedIed;
 
     return svg`<g class="${classMap({
       ied: true,
