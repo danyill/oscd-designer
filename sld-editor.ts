@@ -1970,16 +1970,7 @@ export class SLDEditor extends LitElement {
           this.doc
             .querySelector(':root > Substation')
             ?.getElementsByTagNameNS(sldNs, 'IEDName') ?? []
-        )
-          .filter(
-            linkedIed =>
-              linkedIed.parentElement?.tagName === 'Private' &&
-              !(
-                this.placing &&
-                linkedIed.closest(this.placing.localName) === this.placing
-              )
-          )
-          .map(ied => this.renderIed(ied))}
+        ).map(ied => this.renderIed(ied))}
         ${Array.from(
           this.substation.querySelectorAll(
             'VoltageLevel, Bay, ConductingEquipment, PowerTransformer, Text'
@@ -2319,12 +2310,6 @@ export class SLDEditor extends LitElement {
       ${Array.from(bayOrVL.children)
         .filter(child => child.tagName === 'ConductingEquipment')
         .map(equipment => this.renderEquipment(equipment))}
-      ${Array.from(bayOrVL.children)
-        .filter(child => child.tagName === 'PowerTransformer')
-        .map(equipment => this.renderPowerTransformer(equipment))}
-      ${Array.from(bayOrVL.children)
-        .filter(child => child.tagName === 'PowerTransformer')
-        .map(equipment => this.renderPowerTransformer(equipment))}
       ${Array.from(bayOrVL.children)
         .filter(child => child.tagName === 'PowerTransformer')
         .map(equipment => this.renderPowerTransformer(equipment))}
@@ -2985,7 +2970,9 @@ export class SLDEditor extends LitElement {
       return svg``;
 
     const sclIed = this.doc.querySelector(
-      `:root > IED[name="${linkedIed.getAttribute('name') ?? 'Unknown IED'}"`
+      `:root > IED[name="${
+        linkedIed.getAttributeNS(sldNs, 'name') ?? 'Unknown IED'
+      }"`
     );
 
     if (!sclIed) return svg``;

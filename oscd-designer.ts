@@ -403,7 +403,7 @@ export default class Designer extends LitElement {
 
     Array.from(
       element.querySelectorAll(
-        'VoltageLevel, Bay, ConductingEquipment, PowerTransformer, Vertex'
+        'Bay, ConductingEquipment, PowerTransformer, Vertex'
       )
     )
       .concat(Array.from(element.getElementsByTagNameNS(sldNs, 'IEDName')))
