@@ -1226,18 +1226,12 @@ export default class Designer extends LitElement {
       doc
         .querySelector(':root > Substation')!
         .getElementsByTagNameNS(sldNs, 'IEDName') ?? []
-    ).find(
-      lIed => lIed.getAttributeNS(sldNs, 'name') === name
-      // &&
-      // lIed.parentElement?.tagName === 'Private'
-    );
+    ).find(lIed => lIed.getAttributeNS(sldNs, 'name') === name);
 
     if (linkedIed) return linkedIed;
 
     const newLinkedIed = doc.createElementNS(sldNs, `${this.nsp}:IEDName`);
-    newLinkedIed.setAttributeNS(sldNs, `name`, name);
-    // TODO: I think we should set the attribute as `${this.nsp}:name`
-    // but this breaks everything and I don't know why
+    newLinkedIed.setAttributeNS(sldNs, `${this.nsp}:name`, name);
 
     return newLinkedIed;
   }

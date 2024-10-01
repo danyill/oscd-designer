@@ -566,10 +566,8 @@ export class SLDEditor extends LitElement {
         : this.placingOffset;
 
     if (
-      (this.placing &&
-        element.closest(this.placing.localName) === this.placing) ||
-      (['VoltageLevel', 'Bay'].includes(`${this.placing?.tagName}`) &&
-        this.placing)
+      this.placing &&
+      element.closest(this.placing.localName) === this.placing
     ) {
       const {
         pos: [parentX, parentY],
@@ -599,10 +597,8 @@ export class SLDEditor extends LitElement {
       pos: [x, y],
     } = attributes(element);
     if (
-      (this.placing &&
-        element.closest(this.placing.localName) === this.placing) ||
-      (['VoltageLevel', 'Bay'].includes(`${this.placing?.tagName}`) &&
-        this.placing)
+      this.placing &&
+      element.closest(this.placing.localName) === this.placing
     ) {
       const {
         pos: [parentX, parentY],
@@ -1967,10 +1963,18 @@ export class SLDEditor extends LitElement {
           this.substation.querySelectorAll(':scope > PowerTransformer')
         ).map(transformer => this.renderPowerTransformer(transformer))}
         ${Array.from(
-          this.doc
-            .querySelector(':root > Substation')
-            ?.getElementsByTagNameNS(sldNs, 'IEDName') ?? []
-        ).map(ied => this.renderIed(ied))}
+          this.substation.getElementsByTagNameNS(sldNs, 'IEDName') ?? []
+        )
+          .filter(
+            linkedIed =>
+              linkedIed.parentElement?.tagName === 'Private' &&
+              !['Bay', 'VoltageLevel'].includes(
+                linkedIed.parentElement!.parentElement!.tagName
+              ) &&
+              (!this.placing ||
+                linkedIed.closest(this.placing.localName) !== this.placing)
+          )
+          .map(ied => this.renderIed(ied))}
         ${Array.from(
           this.substation.querySelectorAll(
             'VoltageLevel, Bay, ConductingEquipment, PowerTransformer, Text'
@@ -2087,7 +2091,7 @@ export class SLDEditor extends LitElement {
 
     let deg = 0;
     let text: string | null | TemplateResult<2>[] =
-      element.getAttribute('name');
+      element.getAttribute('name') || element.getAttributeNS(sldNs, 'name');
     let weight = 400;
     let color = 'black';
     const [x, y] = this.renderedLabelPosition(element, { preview });
@@ -2120,11 +2124,18 @@ export class SLDEditor extends LitElement {
       handleClick = () =>
         this.dispatchEvent(newStartPlaceLabelEvent(element, offset));
     }
-    const id =
+    let id: string | typeof nothing;
+    if (
       element.closest('Substation') === this.substation &&
       element.tagName !== 'Text'
-        ? identity(element)
-        : nothing;
+    ) {
+      id = `${identity(element)}`;
+    } else if (element.localName === 'IEDName') {
+      id = `label-${element.getAttributeNS(sldNs, 'name')}`;
+    } else {
+      id = nothing;
+    }
+
     const classes = classMap({
       label: true,
       container:
@@ -2161,7 +2172,6 @@ export class SLDEditor extends LitElement {
 
   renderContainer(bayOrVL: Element, preview = false): TemplateResult<2> {
     const isVL = bayOrVL.tagName === 'VoltageLevel';
-    // only render containers while placing
     if (this.placing === bayOrVL && !preview) return svg``;
 
     let [x, y] = this.renderedPosition(bayOrVL);
@@ -2306,7 +2316,7 @@ export class SLDEditor extends LitElement {
         }" />
       ${Array.from(bayOrVL.children)
         .filter(isBay)
-        .map(bay => this.renderContainer(bay))}
+        .map(bay => this.renderContainer(bay, preview))}
       ${Array.from(bayOrVL.children)
         .filter(child => child.tagName === 'ConductingEquipment')
         .map(equipment => this.renderEquipment(equipment))}
@@ -2335,18 +2345,18 @@ export class SLDEditor extends LitElement {
               )
             )
               .concat(bayOrVL)
-              .concat(
-                this.showIeds
-                  ? Array.from(
-                      bayOrVL.getElementsByTagNameNS(sldNs, 'IEDName')
-                    ).filter(
-                      linkedIed =>
-                        linkedIed.parentElement?.tagName === 'Private' &&
-                        linkedIed.parentElement?.parentElement === bayOrVL
-                    )
-                  : []
+              .map(element => this.renderLabel(element, { preview }))
+          : nothing
+      }
+      ${
+        this.showIeds && preview
+          ? Array.from(bayOrVL.getElementsByTagNameNS(sldNs, 'IEDName'))
+              .filter(
+                linkedIed =>
+                  linkedIed.parentElement?.tagName === 'Private' &&
+                  linkedIed.parentElement?.parentElement === bayOrVL
               )
-              .map(element => this.renderLabel(element, { preview: true }))
+              .map(element => this.renderLabel(element, { preview }))
           : nothing
       }
       ${resizeTLhandle}
@@ -3019,7 +3029,7 @@ export class SLDEditor extends LitElement {
         : nothing
     }"
     transform="translate(${x} ${y})">
-      <title>${linkedIed.getAttribute('name')}</title>
+      <title>${linkedIed.getAttributeNS(sldNs, 'name')}</title>
       <use href="#IED" xlink:href="#IED"
               pointer-events="none" />
       <rect width="1" height="1" fill="none" pointer-events="${

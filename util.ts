@@ -337,10 +337,16 @@ export function reparentElement(element: Element, parent: Element): Edit[] {
     parent,
     reference: getReference(parent, element.tagName),
   });
-  const newName = uniqueName(element, parent);
-  if (newName !== element.getAttribute('name'))
-    edits.push({ element, attributes: { name: newName } });
-  edits.push(...updateConnectivityNodes(element, parent, newName));
+  const name =
+    element.localName !== 'IEDName'
+      ? uniqueName(element, parent)
+      : element.getAttributeNS(sldNs, 'name')!;
+  if (
+    name !== element.getAttribute('name') ||
+    name !== element.getAttributeNS(sldNs, 'name')
+  )
+    edits.push({ element, attributes: { name } });
+  edits.push(...updateConnectivityNodes(element, parent, name));
   return edits;
 }
 
