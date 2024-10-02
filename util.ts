@@ -116,6 +116,13 @@ export function attributes(element: Element): Attrs {
   return { pos, dim, label, flip, rot, bus, weight, color, kind };
 }
 
+export function pPos(element: Element): Element {
+  if (element.parentElement?.tagName !== 'IED') return element;
+  const candidates = element.getElementsByTagNameNS(sldNs, 'Coords');
+  if (candidates.length > 0) return candidates[0];
+  return element;
+}
+
 function pathString(...args: string[]) {
   return args.join('/');
 }
@@ -337,14 +344,8 @@ export function reparentElement(element: Element, parent: Element): Edit[] {
     parent,
     reference: getReference(parent, element.tagName),
   });
-  const name =
-    element.localName !== 'IEDName'
-      ? uniqueName(element, parent)
-      : element.getAttributeNS(sldNs, 'name')!;
-  if (
-    name !== element.getAttribute('name') ||
-    name !== element.getAttributeNS(sldNs, 'name')
-  )
+  const name = uniqueName(element, parent);
+  if (element.localName !== 'IEDName' && name !== element.getAttribute('name'))
     edits.push({ element, attributes: { name } });
   edits.push(...updateConnectivityNodes(element, parent, name));
   return edits;

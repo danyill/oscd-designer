@@ -12,7 +12,7 @@ import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { createRef, Ref, ref } from 'lit/directives/ref.js';
 
-import { Edit, Remove, newEditEvent } from '@openscd/open-scd-core';
+import { Edit, newEditEvent } from '@openscd/open-scd-core';
 
 import type { Dialog } from '@material/mwc-dialog';
 import type { SingleSelectedEvent } from '@material/mwc-list';
@@ -60,6 +60,7 @@ import {
   newStartResizeBREvent,
   newStartResizeTLEvent,
   Point,
+  pPos,
   prettyPrint,
   privType,
   Rect,
@@ -293,7 +294,10 @@ function copy(element: Element, nsp: string): Element {
 }
 
 function renderMenuHeader(element: Element) {
-  const name = element.getAttribute('name') || element.tagName;
+  const name =
+    element.getAttribute('name') ||
+    element.getAttributeNS(sldNs, 'name') ||
+    element.tagName;
   let detail: string | null | TemplateResult<1> = element.getAttribute('desc');
   const type = element.getAttribute('type');
   if (type) {
@@ -345,14 +349,6 @@ function renderMenuHeader(element: Element) {
       : nothing}
     ${footerGraphic}
   </mwc-list-item>`;
-}
-
-function removeIedSld(linkedIed: Element): Remove {
-  // if linkedIed.parentElement!.tagName === 'Private' && linkedIed.parentElement?.getAttribute('');
-  // if (sclPrivate.childElementCount === 1) {
-  //   return { node: sclPrivate };
-  // }
-  return { node: linkedIed };
 }
 
 @customElement('sld-editor')
@@ -470,27 +466,28 @@ export class SLDEditor extends LitElement {
   }
 
   canPlaceAt(element: Element, x: number, y: number, w: number, h: number) {
-    if (
-      element.tagName === 'Substation' ||
-      (element.localName === 'IEDName' && element.namespaceURI === sldNs)
-    )
-      return true;
+    if (element.tagName === 'Substation') return true;
 
     const overlappingSibling = Array.from(
       this.substation.querySelectorAll(`${element.localName}, PowerTransformer`)
-    ).find(
-      sibling =>
-        sibling.closest(element.localName) !== element &&
-        overlapsRect(sibling, x, y, w, h) &&
-        !isBusBar(sibling)
-    );
+    )
+      .concat(
+        Array.from(this.substation.getElementsByTagNameNS(sldNs, 'IEDName'))
+      )
+      .find(
+        sibling =>
+          sibling.closest(element.localName) !== element &&
+          overlapsRect(sibling, x, y, w, h) &&
+          !isBusBar(sibling)
+      );
     if (overlappingSibling && !isBusBar(element)) {
       return false;
     }
 
     const containingParent =
       element.tagName === 'VoltageLevel' ||
-      element.tagName === 'PowerTransformer'
+      element.tagName === 'PowerTransformer' ||
+      element.localName === 'IEDName'
         ? containsRect(this.substation, x, y, w, h)
         : Array.from(
             this.substation.querySelectorAll(
@@ -515,14 +512,17 @@ export class SLDEditor extends LitElement {
     )
       return false;
 
-    const lostChild = Array.from(element.children).find(child => {
-      if (!parentTags[child.tagName]?.includes(element.tagName)) return false;
-      const {
-        pos: [cx, cy],
-        dim: [cw, ch],
-      } = attributes(child);
-      return !contains([x, y, w, h], [cx, cy, cw, ch]);
-    });
+    const lostChild = Array.from(element.children)
+      .concat(Array.from(element.getElementsByTagNameNS(sldNs, 'IEDName')))
+      .find(child => {
+        if (!parentTags[child.localName]?.includes(element.localName))
+          return false;
+        const {
+          pos: [cx, cy],
+          dim: [cw, ch],
+        } = attributes(child);
+        return !contains([x, y, w, h], [cx, cy, cw, ch]);
+      });
     if (lostChild) return false;
 
     return true;
@@ -537,15 +537,18 @@ export class SLDEditor extends LitElement {
   ): boolean {
     if (!this.canPlaceAt(element, x, y, w, h)) return false;
 
-    const lostChild = Array.from(element.children).find(child => {
-      if (!parentTags[child.tagName]?.includes(element.tagName)) return false;
-      const {
-        pos: [cx, cy],
-        dim: [cw, ch],
-      } = attributes(child);
+    const lostChild = Array.from(element.children)
+      .concat(Array.from(element.getElementsByTagNameNS(sldNs, 'IEDName')))
+      .find(child => {
+        if (!parentTags[child.localName]?.includes(element.localName))
+          return false;
+        const {
+          pos: [cx, cy],
+          dim: [cw, ch],
+        } = attributes(child);
 
-      return !contains([x, y, w, h], [cx, cy, cw, ch]);
-    });
+        return !contains([x, y, w, h], [cx, cy, cw, ch]);
+      });
     if (lostChild) return false;
 
     return true;
@@ -554,7 +557,7 @@ export class SLDEditor extends LitElement {
   renderedLabelPosition(element: Element, { preview = false }): Point {
     let {
       label: [x, y],
-    } = attributes(element);
+    } = attributes(pPos(element)!);
 
     // offset IED labels to right adjacent of symbol during placing
     const [offsetX, offsetY] =
@@ -565,13 +568,30 @@ export class SLDEditor extends LitElement {
         ? [-1, -1]
         : this.placingOffset;
 
+    // Text elements within the IED need more complex handling as they are not
+    // hierarchially contained.
+    //
+    // * If placing a Text element for an IED we must check it corresponds
+    //   to the placed IEDName
+    // * If placing a bay or voltage level we must check the IEDName is contained
+    //   before we move the Text element
+    //
     if (
       this.placing &&
-      element.closest(this.placing.localName) === this.placing
+      (element.closest(this.placing.localName) === this.placing ||
+        (this.placing?.localName === 'IEDName' &&
+          element.parentElement?.getAttribute('name') ===
+            this.placing.getAttributeNS(sldNs, 'name')) ||
+        (['VoltageLevel', 'Bay'].includes(this.placing.tagName) &&
+          element.tagName === 'Text' &&
+          element.parentElement?.tagName === 'IED' &&
+          Array.from(this.placing.getElementsByTagNameNS(sldNs, 'IEDName'))
+            .map(iedName => iedName.getAttributeNS(sldNs, 'name'))
+            .includes(element.parentElement?.getAttribute('name'))))
     ) {
       const {
         pos: [parentX, parentY],
-      } = attributes(this.placing);
+      } = attributes(pPos(this.placing));
       x += this.mouseX - parentX - offsetX;
       y += this.mouseY - parentY - offsetY;
     }
@@ -759,26 +779,60 @@ export class SLDEditor extends LitElement {
   }
 
   addTextTo(element: Element) {
-    const {
-      pos: [x, y],
-    } = attributes(element);
-    const text = this.doc.createElementNS(
-      this.doc.documentElement.namespaceURI,
-      'Text'
-    );
-    text.setAttributeNS(sldNs, `${this.nsp}:lx`, x.toString());
-    text.setAttributeNS(
-      sldNs,
-      `${this.nsp}:ly`,
-      (y < 2 ? y + 1 : y - 1).toString()
-    );
-    this.dispatchEvent(
-      newEditEvent({
-        node: text,
-        parent: element,
-        reference: getReference(element, 'Text'),
-      })
-    );
+    if (element.localName === 'IEDName') {
+      const {
+        pos: [x, y],
+      } = attributes(element);
+
+      const sclIed = this.doc.querySelector(
+        `IED[name="${element.getAttributeNS(sldNs, 'name')}"]`
+      )!;
+
+      const text = this.doc.createElementNS(
+        this.doc.documentElement.namespaceURI,
+        'Text'
+      );
+      const newCoord = element.ownerDocument.createElementNS(
+        sldNs,
+        `${this.nsp}:Coords`
+      );
+      newCoord.setAttributeNS(sldNs, `${this.nsp}:lx`, x.toString());
+      newCoord.setAttributeNS(
+        sldNs,
+        `${this.nsp}:ly`,
+        (y < 2 ? y + 1 : y - 1).toString()
+      );
+      text.appendChild(newCoord);
+      if (sclIed)
+        this.dispatchEvent(
+          newEditEvent({
+            node: text,
+            parent: sclIed,
+            reference: getReference(sclIed, 'Text'),
+          })
+        );
+    } else {
+      const {
+        pos: [x, y],
+      } = attributes(element);
+      const text = this.doc.createElementNS(
+        this.doc.documentElement.namespaceURI,
+        'Text'
+      );
+      text.setAttributeNS(sldNs, `${this.nsp}:lx`, x.toString());
+      text.setAttributeNS(
+        sldNs,
+        `${this.nsp}:ly`,
+        (y < 2 ? y + 1 : y - 1).toString()
+      );
+      this.dispatchEvent(
+        newEditEvent({
+          node: text,
+          parent: element,
+          reference: getReference(element, 'Text'),
+        })
+      );
+    }
   }
 
   transformerWindingMenuItems(winding: Element) {
@@ -908,7 +962,7 @@ export class SLDEditor extends LitElement {
               <span>Add Text</span>
               <mwc-icon slot="graphic">title</mwc-icon>
             </mwc-list-item>`,
-            handler: () => this.addTextTo(sclIed),
+            handler: () => this.addTextTo(linkedIed),
           },
 
       {
@@ -925,7 +979,7 @@ export class SLDEditor extends LitElement {
         </mwc-list-item>`,
         handler: () => {
           const edits: Edit[] = [];
-          edits.push([removeIED({ node: sclIed })]);
+          edits.push([removeIED({ node: sclIed }), { node: linkedIed }]);
           this.dispatchEvent(newEditEvent(edits));
         },
       },
@@ -935,7 +989,11 @@ export class SLDEditor extends LitElement {
           <mwc-icon slot="graphic">location_off</mwc-icon>
         </mwc-list-item>`,
         handler: () => {
-          this.dispatchEvent(newEditEvent(removeIedSld(linkedIed)));
+          const coords = Array.from(
+            sclIed.getElementsByTagNameNS(sldNs, 'Coords')
+          ).map(coord => ({ node: coord }));
+
+          this.dispatchEvent(newEditEvent([{ node: linkedIed }, ...coords]));
         },
       },
     ];
@@ -1428,7 +1486,14 @@ export class SLDEditor extends LitElement {
   }
 
   textMenuItems(text: Element) {
-    const { weight, color } = attributes(text);
+    let textNsEl;
+    if (text.parentElement?.tagName === 'IED') {
+      textNsEl = pPos(text);
+    } else {
+      textNsEl = text;
+    }
+
+    const { weight, color } = attributes(textNsEl!);
     const items: MenuItem[] = [
       {
         content: html`<mwc-list-item graphic="icon">
@@ -1481,7 +1546,7 @@ export class SLDEditor extends LitElement {
         handler: () => {
           this.dispatchEvent(
             newEditEvent({
-              element: text,
+              element: pPos(text)!,
               attributes: {
                 [`${this.nsp}:weight`]: { namespaceURI: sldNs, value: '500' },
               },
@@ -1499,7 +1564,7 @@ export class SLDEditor extends LitElement {
         handler: () => {
           this.dispatchEvent(
             newEditEvent({
-              element: text,
+              element: pPos(text)!,
               attributes: {
                 [`${this.nsp}:weight`]: { namespaceURI: sldNs, value: null },
               },
@@ -1520,7 +1585,7 @@ export class SLDEditor extends LitElement {
         handler: () => {
           this.dispatchEvent(
             newEditEvent({
-              element: text,
+              element: pPos(text)!,
               attributes: {
                 [`${this.nsp}:color`]: {
                   namespaceURI: sldNs,
@@ -1544,7 +1609,7 @@ export class SLDEditor extends LitElement {
         handler: () => {
           this.dispatchEvent(
             newEditEvent({
-              element: text,
+              element: pPos(text)!,
               attributes: {
                 [`${this.nsp}:color`]: {
                   namespaceURI: sldNs,
@@ -1565,7 +1630,7 @@ export class SLDEditor extends LitElement {
         handler: () => {
           this.dispatchEvent(
             newEditEvent({
-              element: text,
+              element: pPos(text)!,
               attributes: {
                 [`${this.nsp}:color`]: {
                   namespaceURI: sldNs,
@@ -1943,7 +2008,7 @@ export class SLDEditor extends LitElement {
               node.getAttribute('name') !== 'grounded' &&
               !(
                 this.placing &&
-                node.closest(this.placing.tagName) === this.placing
+                node.closest(this.placing.localName) === this.placing
               ) &&
               !isBusBar(node.parentElement!)
           )
@@ -1954,7 +2019,7 @@ export class SLDEditor extends LitElement {
               node.getAttribute('name') !== 'grounded' &&
               !(
                 this.placing &&
-                node.closest(this.placing.tagName) === this.placing
+                node.closest(this.placing.localName) === this.placing
               ) &&
               isBusBar(node.parentElement!)
           )
@@ -1991,6 +2056,26 @@ export class SLDEditor extends LitElement {
             e =>
               !this.placing ||
               e.closest(this.placing.localName) !== this.placing
+          )
+          .map(element => this.renderLabel(element))}
+        ${Array.from(this.doc.querySelectorAll(':root > IED > Text'))
+          .filter(
+            e =>
+              Array.from(
+                this.substation.getElementsByTagNameNS(sldNs, 'IEDName')
+              )
+                .map(iedName => iedName.getAttributeNS(sldNs, 'name'))
+                .includes(e.parentElement!.getAttribute('name')) &&
+              (!this.placing ||
+                e.closest(this.placing.localName) !== this.placing ||
+                (['VoltageLevel', 'Bay'].includes(this.placing.tagName) &&
+                  e.tagName === 'Text' &&
+                  e.parentElement?.tagName === 'IED' &&
+                  Array.from(
+                    this.placing.getElementsByTagNameNS(sldNs, 'IEDName')
+                  )
+                    .map(iedName => iedName.getAttributeNS(sldNs, 'name'))
+                    .includes(e.parentElement?.getAttribute('name'))))
           )
           .map(element => this.renderLabel(element))}
         ${transformerPlacingTarget} ${iedPlacingTarget} ${placingLabelTarget}
@@ -2097,8 +2182,8 @@ export class SLDEditor extends LitElement {
     const [x, y] = this.renderedLabelPosition(element, { preview });
 
     if (element.tagName === 'Text') {
-      ({ weight, color } = attributes(element));
-      deg = attributes(element).rot * 90;
+      ({ weight, color } = attributes(pPos(element)!));
+      deg = attributes(pPos(element)!).rot * 90;
       if (element.textContent)
         text = element.textContent?.split(/\r?\n/).map(
           (line, i) =>
@@ -2355,6 +2440,22 @@ export class SLDEditor extends LitElement {
                 linkedIed =>
                   linkedIed.parentElement?.tagName === 'Private' &&
                   linkedIed.parentElement?.parentElement === bayOrVL
+              )
+              .map(element => this.renderLabel(element, { preview }))
+          : nothing
+      }
+      ${
+        this.showIeds && preview
+          ? Array.from(this.doc.querySelectorAll(':root > IED > Text'))
+              .filter(e =>
+                Array.from(bayOrVL.getElementsByTagNameNS(sldNs, 'IEDName'))
+                  .filter(
+                    linkedIed =>
+                      linkedIed.parentElement?.tagName === 'Private' &&
+                      linkedIed.parentElement?.parentElement === bayOrVL
+                  )
+                  .map(iedName => iedName.getAttributeNS(sldNs, 'name'))
+                  .includes(e.parentElement!.getAttribute('name'))
               )
               .map(element => this.renderLabel(element, { preview }))
           : nothing
@@ -3051,7 +3152,7 @@ export class SLDEditor extends LitElement {
         ? [
             this.renderLabel(linkedIed, { preview }),
             sclIed.querySelector('Text')
-              ? this.renderLabel(sclIed.querySelector('Text')!)
+              ? this.renderLabel(sclIed.querySelector('Text')!, { preview })
               : nothing,
           ]
         : nothing

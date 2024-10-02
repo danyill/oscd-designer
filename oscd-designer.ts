@@ -30,6 +30,7 @@ import {
   elementPath,
   eqTypes,
   isBusBar,
+  pPos,
   PlaceEvent,
   PlaceLabelEvent,
   Point,
@@ -290,10 +291,10 @@ export default class Designer extends LitElement {
   }
 
   rotateElement(element: Element) {
-    const { rot } = attributes(element);
+    const { rot } = attributes(pPos(element)!);
     const edits = [
       {
-        element,
+        element: pPos(element)!,
         attributes: {
           [`${this.nsp}:rot`]: {
             namespaceURI: sldNs,
@@ -316,7 +317,7 @@ export default class Designer extends LitElement {
   placeLabel(element: Element, x: number, y: number) {
     this.dispatchEvent(
       newEditEvent({
-        element,
+        element: pPos(element)!,
         attributes: {
           lx: { namespaceURI: sldNs, value: x.toString() },
           ly: { namespaceURI: sldNs, value: y.toString() },
@@ -381,25 +382,49 @@ export default class Designer extends LitElement {
       });
     }
 
-    Array.from(element.querySelectorAll('Text')).forEach(text => {
-      const {
-        label: [textLX, textLY],
-      } = attributes(text);
-      const newAttributes = {
-        lx: {
-          namespaceURI: sldNs,
-          value: (textLX + dx).toString(),
-        },
-        ly: {
-          namespaceURI: sldNs,
-          value: (textLY + dy).toString(),
-        },
-      };
-      edits.push({
-        element: text,
-        attributes: newAttributes,
+    let iedTexts: Element | Element[] | null = null;
+
+    if (element.localName === 'IEDName' && element.namespaceURI === sldNs) {
+      iedTexts = this.doc.querySelector(
+        `:root > IED[name="${element.getAttributeNS(sldNs, 'name')}"] > Text`
+      );
+    } else if (
+      ['VoltageLevel', 'Bay'].includes(element.tagName) &&
+      element.getElementsByTagNameNS(sldNs, 'IEDName').length
+    ) {
+      iedTexts = Array.from(
+        this.doc.querySelectorAll(':root > IED > Text')
+      ).filter(e =>
+        Array.from(element.getElementsByTagNameNS(sldNs, 'IEDName'))
+          .filter(linkedIed => linkedIed.parentElement?.tagName === 'Private')
+          .map(iedName => iedName.getAttributeNS(sldNs, 'name'))
+          .includes(e.parentElement!.getAttribute('name'))
+      );
+    }
+
+    Array.from(element.querySelectorAll('Text'))
+      .concat(iedTexts ?? [])
+      .forEach(text => {
+        const coordElement = pPos(text)!;
+
+        const {
+          label: [textLX, textLY],
+        } = attributes(pPos(text)!);
+        const newAttributes = {
+          lx: {
+            namespaceURI: sldNs,
+            value: (textLX + dx).toString(),
+          },
+          ly: {
+            namespaceURI: sldNs,
+            value: (textLY + dy).toString(),
+          },
+        };
+        edits.push({
+          element: coordElement,
+          attributes: newAttributes,
+        });
       });
-    });
 
     Array.from(
       element.querySelectorAll(
@@ -751,9 +776,7 @@ export default class Designer extends LitElement {
     if (!this.doc) return html`<p>Please open an SCL document</p>`;
 
     const linkedIeds = Array.from(
-      this.doc
-        .querySelector(':root > Substation')
-        ?.getElementsByTagNameNS(sldNs, 'IEDName') ?? []
+      this.doc.getElementsByTagNameNS(sldNs, 'IEDName') ?? []
     );
 
     return html`<main>
@@ -865,14 +888,14 @@ export default class Designer extends LitElement {
 
                         const aPlaced = linkedIeds.find(
                           ied =>
-                            ied.getAttribute('name') === aName &&
+                            ied.getAttributeNS(sldNs, 'name') === aName &&
                             ied.hasAttributeNS(sldNs, 'x')
                         )
                           ? 'A'
                           : 'B';
                         const bPlaced = linkedIeds.find(
                           ied =>
-                            ied.getAttribute('name') === bName &&
+                            ied.getAttributeNS(sldNs, 'name') === bName &&
                             ied.hasAttributeNS(sldNs, 'x')
                         )
                           ? 'A'
@@ -885,7 +908,7 @@ export default class Designer extends LitElement {
                       .map(ied => {
                         const linkedIed = linkedIeds.find(
                           lIed =>
-                            lIed.getAttribute('name') ===
+                            lIed.getAttributeNS(sldNs, 'name') ===
                               ied.getAttribute('name') &&
                             lIed.hasAttributeNS(sldNs, 'x')
                         );
@@ -896,7 +919,7 @@ export default class Designer extends LitElement {
                           ?hasMeta=${!!linkedIeds.find(
                             placedIed =>
                               ied.getAttribute('name') ===
-                                placedIed.getAttribute('name') &&
+                                placedIed.getAttributeNS(sldNs, 'name') &&
                               placedIed.hasAttributeNS(sldNs, 'x')
                           )}
                           data-name="${ied.getAttribute('name')!}"
@@ -1223,9 +1246,7 @@ export default class Designer extends LitElement {
 
   insertOrGetIed(name: string, doc: XMLDocument): Element {
     const linkedIed = Array.from(
-      doc
-        .querySelector(':root > Substation')!
-        .getElementsByTagNameNS(sldNs, 'IEDName') ?? []
+      doc.getElementsByTagNameNS(sldNs, 'IEDName') ?? []
     ).find(lIed => lIed.getAttributeNS(sldNs, 'name') === name);
 
     if (linkedIed) return linkedIed;
