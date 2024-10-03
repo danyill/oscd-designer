@@ -1096,7 +1096,8 @@ export default class Designer extends LitElement {
             : nothing
         }
         ${
-          this.doc.querySelector(':root > IED')
+          this.doc.querySelector(':root > IED') &&
+          this.doc.querySelector(':root > Substation')
             ? html`<mwc-icon-button-toggle
                 id="ieds"
                 label="Toggle IEDs"

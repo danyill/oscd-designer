@@ -180,7 +180,7 @@ export function removeIedTextCoords(element: Element): Remove[] {
 
   return Array.from(
     element.ownerDocument.querySelectorAll(
-      ':root > IED > Text > Private[type="OpenSCD-Coords"'
+      ':root > IED > Text > Private[type="OpenSCD-Coords"]'
     )
   )
     .filter(sclPrivate =>

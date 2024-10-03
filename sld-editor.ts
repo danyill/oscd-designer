@@ -1005,11 +1005,19 @@ export class SLDEditor extends LitElement {
           <mwc-icon slot="graphic">location_off</mwc-icon>
         </mwc-list-item>`,
         handler: () => {
+          const edits: Edit[] = [{ node: linkedIed }];
+
           const coords = Array.from(
             sclIed.getElementsByTagNameNS(sldNs, 'Coords')
           ).map(coord => ({ node: coord.parentElement! }));
+          if (coords) edits.push(coords);
 
-          this.dispatchEvent(newEditEvent([{ node: linkedIed }, ...coords]));
+          const textCoordinates = sclIed.querySelector(
+            ':scope > Text > Private[type="OpenSCD-Coords"]'
+          );
+          if (textCoordinates) edits.push({ node: textCoordinates });
+
+          this.dispatchEvent(newEditEvent(edits));
         },
       },
     ];
