@@ -1,4 +1,4 @@
-import { Edit } from '@openscd/open-scd-core';
+import { Edit, Remove } from '@openscd/open-scd-core';
 import { getReference } from '@openscd/oscd-scl';
 
 export const privType = 'Transpower-SLD-Vertices';
@@ -171,6 +171,24 @@ export function removeNode(node: Element): Edit[] {
   ).forEach(terminal => edits.push({ node: terminal }));
 
   return edits;
+}
+
+export function removeIedTextCoords(element: Element): Remove[] {
+  const iedNames = Array.from(
+    element.getElementsByTagNameNS(sldNs, 'IEDName')
+  ).map(iedName => iedName.getAttributeNS(sldNs, 'name'));
+
+  return Array.from(
+    element.ownerDocument.querySelectorAll(
+      ':root > IED > Text > Private[type="OpenSCD-Coords"'
+    )
+  )
+    .filter(sclPrivate =>
+      iedNames.includes(
+        sclPrivate.parentElement!.parentElement!.getAttribute('name')
+      )
+    )
+    .map(coords => ({ node: coords }));
 }
 
 function reverseSection(section: Element): Edit[] {

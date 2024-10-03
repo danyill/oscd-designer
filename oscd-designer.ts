@@ -848,9 +848,7 @@ export default class Designer extends LitElement {
             >
               ${voltageLevelIcon}
             </mwc-fab>
-            ${Array.from(this.doc.documentElement.children).find(
-              c => c.tagName === 'IED'
-            )
+            ${this.doc.querySelector(':root > IED')
               ? html`<mwc-fab
                     mini
                     icon="developer_board"
@@ -1083,49 +1081,57 @@ export default class Designer extends LitElement {
                   >${ptrIcon(2, { kind: 'earthing' })}</mwc-fab
                 >`
             : nothing
-        }${
-      this.doc.querySelector('VoltageLevel, PowerTransformer')
-        ? html`<mwc-icon-button-toggle
-              id="labels"
-              label="Toggle Labels"
-              title="Toggle Labels"
-              on
-              onIcon="font_download"
-              offIcon="font_download_off"
-              @click=${() => this.requestUpdate()}
-            ></mwc-icon-button-toggle
-            ><mwc-icon-button-toggle
-              id="ieds"
-              label="Toggle IEDs"
-              title="Toggle IEDs"
-              on
-              onIcon="developer_board"
-              offIcon="developer_board_off"
-              @click=${() => {
-                if (this.iedMenu) this.requestUpdate();
-              }}
-            ></mwc-icon-button-toggle> `
-        : nothing
-    }${
-      this.doc.querySelector('Substation')
-        ? html`<mwc-icon-button
-              icon="zoom_in"
-              label="Zoom In"
-              title="Zoom In (${Math.round((100 * (this.gridSize + 3)) / 32)}%)"
-              @click=${() => this.zoomIn()}
-            >
-            </mwc-icon-button
-            ><mwc-icon-button
-              icon="zoom_out"
-              label="Zoom Out"
-              ?disabled=${this.gridSize < 4}
-              title="Zoom Out (${Math.round(
-                (100 * (this.gridSize - 3)) / 32
-              )}%)"
-              @click=${() => this.zoomOut()}
-            ></mwc-icon-button>`
-        : nothing
-    }
+        }
+        ${
+          this.doc.querySelector('VoltageLevel, PowerTransformer')
+            ? html`<mwc-icon-button-toggle
+                id="labels"
+                label="Toggle Labels"
+                title="Toggle Labels"
+                on
+                onIcon="font_download"
+                offIcon="font_download_off"
+                @click=${() => this.requestUpdate()}
+              ></mwc-icon-button-toggle>`
+            : nothing
+        }
+        ${
+          this.doc.querySelector(':root > IED')
+            ? html`<mwc-icon-button-toggle
+                id="ieds"
+                label="Toggle IEDs"
+                title="Toggle IEDs"
+                on
+                onIcon="developer_board"
+                offIcon="developer_board_off"
+                @click=${() => {
+                  if (this.iedMenu) this.requestUpdate();
+                }}
+              ></mwc-icon-button-toggle>`
+            : nothing
+        }
+        ${
+          this.doc.querySelector('Substation')
+            ? html`<mwc-icon-button
+                  icon="zoom_in"
+                  label="Zoom In"
+                  title="Zoom In (${Math.round(
+                    (100 * (this.gridSize + 3)) / 32
+                  )}%)"
+                  @click=${() => this.zoomIn()}
+                >
+                </mwc-icon-button
+                ><mwc-icon-button
+                  icon="zoom_out"
+                  label="Zoom Out"
+                  ?disabled=${this.gridSize < 4}
+                  title="Zoom Out (${Math.round(
+                    (100 * (this.gridSize - 3)) / 32
+                  )}%)"
+                  @click=${() => this.zoomOut()}
+                ></mwc-icon-button>`
+            : nothing
+        }
         </mwc-icon-button
         >${
           this.placing ||

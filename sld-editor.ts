@@ -64,6 +64,7 @@ import {
   prettyPrint,
   privType,
   Rect,
+  removeIedTextCoords,
   removeNode,
   removeTerminal,
   ringedEqTypes,
@@ -225,6 +226,13 @@ function preventDefault(e: MouseEvent) {
 
 function copy(element: Element, nsp: string): Element {
   const clone = element.cloneNode(true) as Element;
+
+  if (['Bay', 'VoltageLevel'].includes(element.tagName)) {
+    Array.from(clone.getElementsByTagNameNS(sldNs, 'IEDName')).forEach(ied =>
+      ied.remove()
+    );
+  }
+
   const terminals = new Set<Element>(
     Array.from(element.querySelectorAll('Terminal, NeutralPoint'))
   );
@@ -784,25 +792,33 @@ export class SLDEditor extends LitElement {
         pos: [x, y],
       } = attributes(element);
 
-      const sclIed = this.doc.querySelector(
-        `IED[name="${element.getAttributeNS(sldNs, 'name')}"]`
-      )!;
-
-      const text = this.doc.createElementNS(
-        this.doc.documentElement.namespaceURI,
-        'Text'
-      );
-      const newCoord = element.ownerDocument.createElementNS(
-        sldNs,
-        `${this.nsp}:Coords`
-      );
+      // TODO: Why are namespace entries shown against items?
+      const newCoord = this.doc.createElementNS(sldNs, `${this.nsp}:Coords`);
       newCoord.setAttributeNS(sldNs, `${this.nsp}:lx`, x.toString());
       newCoord.setAttributeNS(
         sldNs,
         `${this.nsp}:ly`,
         (y < 2 ? y + 1 : y - 1).toString()
       );
-      text.appendChild(newCoord);
+
+      const sclPrivate = this.doc.createElementNS(
+        this.doc.documentElement.namespaceURI,
+        'Private'
+      );
+      sclPrivate.setAttribute('type', 'OpenSCD-Coords');
+      sclPrivate.appendChild(newCoord);
+
+      const sclIed = this.doc.querySelector(
+        `IED[name="${element.getAttributeNS(sldNs, 'name')}"]`
+      )!;
+
+      // TODO: Why are namespace entries shown against items?
+      const text = this.doc.createElementNS(
+        this.doc.documentElement.namespaceURI,
+        'Text'
+      );
+      text.appendChild(sclPrivate);
+
       if (sclIed)
         this.dispatchEvent(
           newEditEvent({
@@ -991,7 +1007,7 @@ export class SLDEditor extends LitElement {
         handler: () => {
           const coords = Array.from(
             sclIed.getElementsByTagNameNS(sldNs, 'Coords')
-          ).map(coord => ({ node: coord }));
+          ).map(coord => ({ node: coord.parentElement! }));
 
           this.dispatchEvent(newEditEvent([{ node: linkedIed }, ...coords]));
         },
@@ -1478,6 +1494,7 @@ export class SLDEditor extends LitElement {
           });
 
           edits.push({ node: bayOrVL });
+          edits.push(removeIedTextCoords(bayOrVL));
           this.dispatchEvent(newEditEvent(edits));
         },
       },
@@ -1925,7 +1942,12 @@ export class SLDEditor extends LitElement {
           label="Delete Substation"
           title="Delete Substation"
           @click=${() => {
-            this.dispatchEvent(newEditEvent({ node: this.substation }));
+            this.dispatchEvent(
+              newEditEvent([
+                { node: this.substation },
+                removeIedTextCoords(this.substation),
+              ])
+            );
           }}
           icon="delete"
         >
@@ -2058,26 +2080,28 @@ export class SLDEditor extends LitElement {
               e.closest(this.placing.localName) !== this.placing
           )
           .map(element => this.renderLabel(element))}
-        ${Array.from(this.doc.querySelectorAll(':root > IED > Text'))
-          .filter(
-            e =>
-              Array.from(
-                this.substation.getElementsByTagNameNS(sldNs, 'IEDName')
-              )
-                .map(iedName => iedName.getAttributeNS(sldNs, 'name'))
-                .includes(e.parentElement!.getAttribute('name')) &&
-              (!this.placing ||
-                e.closest(this.placing.localName) !== this.placing ||
-                (['VoltageLevel', 'Bay'].includes(this.placing.tagName) &&
-                  e.tagName === 'Text' &&
-                  e.parentElement?.tagName === 'IED' &&
+        ${this.showIeds
+          ? Array.from(this.doc.querySelectorAll(':root > IED > Text'))
+              .filter(
+                e =>
                   Array.from(
-                    this.placing.getElementsByTagNameNS(sldNs, 'IEDName')
+                    this.substation.getElementsByTagNameNS(sldNs, 'IEDName')
                   )
                     .map(iedName => iedName.getAttributeNS(sldNs, 'name'))
-                    .includes(e.parentElement?.getAttribute('name'))))
-          )
-          .map(element => this.renderLabel(element))}
+                    .includes(e.parentElement!.getAttribute('name')) &&
+                  (!this.placing ||
+                    e.closest(this.placing.localName) !== this.placing ||
+                    (['VoltageLevel', 'Bay'].includes(this.placing.tagName) &&
+                      e.tagName === 'Text' &&
+                      e.parentElement?.tagName === 'IED' &&
+                      Array.from(
+                        this.placing.getElementsByTagNameNS(sldNs, 'IEDName')
+                      )
+                        .map(iedName => iedName.getAttributeNS(sldNs, 'name'))
+                        .includes(e.parentElement?.getAttribute('name'))))
+              )
+              .map(element => this.renderLabel(element))
+          : []}
         ${transformerPlacingTarget} ${iedPlacingTarget} ${placingLabelTarget}
         ${placingElement}
       </svg>
