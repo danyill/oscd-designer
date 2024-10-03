@@ -118,8 +118,11 @@ export function attributes(element: Element): Attrs {
 
 export function pPos(element: Element): Element {
   if (element.parentElement?.tagName !== 'IED') return element;
-  const candidates = element.getElementsByTagNameNS(sldNs, 'Coords');
-  if (candidates.length > 0) return candidates[0];
+  const candidates = element.parentElement
+    .querySelector(':scope > Private[type="OpenSCD-Coords"]')
+    ?.getElementsByTagNameNS(sldNs, 'Coords');
+  if (candidates && candidates.length > 0) return candidates[0];
+  // TODO: How best to handle a missing text element? Can this ever happen?
   return element;
 }
 
@@ -180,7 +183,7 @@ export function removeIedTextCoords(element: Element): Remove[] {
 
   return Array.from(
     element.ownerDocument.querySelectorAll(
-      ':root > IED > Text > Private[type="OpenSCD-Coords"]'
+      ':root > IED > Private[type="OpenSCD-Coords"]'
     )
   )
     .filter(sclPrivate =>

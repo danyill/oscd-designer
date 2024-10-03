@@ -792,7 +792,6 @@ export class SLDEditor extends LitElement {
         pos: [x, y],
       } = attributes(element);
 
-      // TODO: Why are namespace entries shown against items?
       const newCoord = this.doc.createElementNS(sldNs, `${this.nsp}:Coords`);
       newCoord.setAttributeNS(sldNs, `${this.nsp}:lx`, x.toString());
       newCoord.setAttributeNS(
@@ -812,20 +811,25 @@ export class SLDEditor extends LitElement {
         `IED[name="${element.getAttributeNS(sldNs, 'name')}"]`
       )!;
 
-      // TODO: Why are namespace entries shown against items?
       const text = this.doc.createElementNS(
         this.doc.documentElement.namespaceURI,
         'Text'
       );
-      text.appendChild(sclPrivate);
 
       if (sclIed)
         this.dispatchEvent(
-          newEditEvent({
-            node: text,
-            parent: sclIed,
-            reference: getReference(sclIed, 'Text'),
-          })
+          newEditEvent([
+            {
+              node: text,
+              parent: sclIed,
+              reference: getReference(sclIed, 'Text'),
+            },
+            {
+              node: sclPrivate,
+              parent: sclIed,
+              reference: getReference(sclIed, 'Private'),
+            },
+          ])
         );
     } else {
       const {
@@ -1013,7 +1017,7 @@ export class SLDEditor extends LitElement {
           if (coords) edits.push(coords);
 
           const textCoordinates = sclIed.querySelector(
-            ':scope > Text > Private[type="OpenSCD-Coords"]'
+            ':scope > Private[type="OpenSCD-Coords"]'
           );
           if (textCoordinates) edits.push({ node: textCoordinates });
 

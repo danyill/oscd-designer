@@ -328,6 +328,7 @@ export default class Designer extends LitElement {
   }
 
   placeElement(element: Element, parent: Element, x: number, y: number) {
+    let placingElement: Element | null = element;
     const edits: Edit[] = [];
     if (element.parentElement !== parent) {
       edits.push(...reparentElement(element, parent));
@@ -346,7 +347,7 @@ export default class Designer extends LitElement {
       let lx = oldLX;
       let ly = oldLY;
       if (
-        element.tagName === 'ConductingEquipment' &&
+        element.localName === 'ConductingEquipment' &&
         !element.hasAttributeNS(sldNs, 'lx') &&
         rot % 2 === 0
       ) {
@@ -354,7 +355,7 @@ export default class Designer extends LitElement {
         ly += 1;
       }
       if (
-        element.tagName === 'PowerTransformer' &&
+        element.localName === 'PowerTransformer' &&
         !element.hasAttributeNS(sldNs, 'lx')
       ) {
         if (rot < 2) lx += 1.5;
@@ -371,8 +372,53 @@ export default class Designer extends LitElement {
         ly += 1;
       }
 
+      if (
+        element.localName === 'Text' &&
+        element.parentElement?.tagName === 'IED'
+      ) {
+        placingElement = element.parentElement.querySelector(
+          'Private[type="OpenSCD-Coords"]'
+        );
+
+        // TODO: Abstract to function
+        if (!placingElement) {
+          // missing IED text coordinates
+          const newCoord = this.doc.createElementNS(
+            sldNs,
+            `${this.nsp}:Coords`
+          );
+          newCoord.setAttributeNS(sldNs, `${this.nsp}:lx`, x.toString());
+          newCoord.setAttributeNS(
+            sldNs,
+            `${this.nsp}:ly`,
+            (y < 2 ? y + 1 : y - 1).toString()
+          );
+
+          const sclPrivate = this.doc.createElementNS(
+            this.doc.documentElement.namespaceURI,
+            'Private'
+          );
+          sclPrivate.setAttribute('type', 'OpenSCD-Coords');
+          sclPrivate.appendChild(newCoord);
+
+          const sclIed = element.parentElement;
+          if (sclIed)
+            this.dispatchEvent(
+              newEditEvent({
+                node: sclPrivate,
+                parent: sclIed,
+                reference: getReference(sclIed, 'Private'),
+              })
+            );
+
+          placingElement = element.parentElement.querySelector(
+            'Private[type="OpenSCD-Coords"]'
+          )!;
+        }
+      }
+
       edits.push({
-        element,
+        element: placingElement,
         attributes: {
           x: { namespaceURI: sldNs, value: x.toString() },
           y: { namespaceURI: sldNs, value: y.toString() },
