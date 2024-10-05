@@ -1924,6 +1924,20 @@ export class SLDEditor extends LitElement {
 
     const menu = this.renderMenu();
 
+    const iedNameElements = Array.from(
+      this.substation.getElementsByTagNameNS(sldNs, 'IEDName')
+    );
+
+    const iedNames = iedNameElements.map(iedName =>
+      iedName.getAttributeNS(sldNs, 'name')
+    );
+
+    const placingIedNames = this.placing
+      ? Array.from(this.placing.getElementsByTagNameNS(sldNs, 'IEDName')).map(
+          iedName => iedName.getAttributeNS(sldNs, 'name')
+        )
+      : [];
+
     return html`<section>
       <h2>
         ${this.substation.getAttribute('name')}
@@ -2061,9 +2075,7 @@ export class SLDEditor extends LitElement {
         ${Array.from(
           this.substation.querySelectorAll(':scope > PowerTransformer')
         ).map(transformer => this.renderPowerTransformer(transformer))}
-        ${Array.from(
-          this.substation.getElementsByTagNameNS(sldNs, 'IEDName') ?? []
-        )
+        ${iedNameElements
           .filter(
             linkedIed =>
               linkedIed.parentElement?.tagName === 'Private' &&
@@ -2079,13 +2091,7 @@ export class SLDEditor extends LitElement {
             'VoltageLevel, Bay, ConductingEquipment, PowerTransformer, Text'
           )
         )
-          .concat(
-            this.showIeds
-              ? Array.from(
-                  this.substation.getElementsByTagNameNS(sldNs, 'IEDName')
-                )
-              : []
-          )
+          .concat(this.showIeds ? iedNameElements : [])
           .filter(
             e =>
               !this.placing ||
@@ -2096,21 +2102,15 @@ export class SLDEditor extends LitElement {
           ? Array.from(this.doc.querySelectorAll(':root > IED > Text'))
               .filter(
                 e =>
-                  Array.from(
-                    this.substation.getElementsByTagNameNS(sldNs, 'IEDName')
-                  )
-                    .map(iedName => iedName.getAttributeNS(sldNs, 'name'))
-                    .includes(e.parentElement!.getAttribute('name')) &&
+                  iedNames.includes(e.parentElement!.getAttribute('name')) &&
                   (!this.placing ||
                     e.closest(this.placing.localName) !== this.placing ||
                     (['VoltageLevel', 'Bay'].includes(this.placing.tagName) &&
                       e.tagName === 'Text' &&
                       e.parentElement?.tagName === 'IED' &&
-                      Array.from(
-                        this.placing.getElementsByTagNameNS(sldNs, 'IEDName')
-                      )
-                        .map(iedName => iedName.getAttributeNS(sldNs, 'name'))
-                        .includes(e.parentElement?.getAttribute('name'))))
+                      placingIedNames.includes(
+                        e.parentElement?.getAttribute('name')
+                      )))
               )
               .map(element => this.renderLabel(element))
           : []}
@@ -2409,6 +2409,10 @@ export class SLDEditor extends LitElement {
       this.resizingBR !== bayOrVL &&
       this.resizingTL !== bayOrVL;
 
+    const containedIedNames = Array.from(
+      bayOrVL.getElementsByTagNameNS(sldNs, 'IEDName')
+    );
+
     return svg`<g id="${
       bayOrVL.closest('Substation') === this.substation
         ? identity(bayOrVL)
@@ -2471,7 +2475,7 @@ export class SLDEditor extends LitElement {
       }
       ${
         this.showIeds && preview
-          ? Array.from(bayOrVL.getElementsByTagNameNS(sldNs, 'IEDName'))
+          ? containedIedNames
               .filter(
                 linkedIed =>
                   linkedIed.parentElement?.tagName === 'Private' &&
@@ -2484,7 +2488,7 @@ export class SLDEditor extends LitElement {
         this.showIeds && preview
           ? Array.from(this.doc.querySelectorAll(':root > IED > Text'))
               .filter(e =>
-                Array.from(bayOrVL.getElementsByTagNameNS(sldNs, 'IEDName'))
+                containedIedNames
                   .filter(
                     linkedIed =>
                       linkedIed.parentElement?.tagName === 'Private' &&
