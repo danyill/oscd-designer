@@ -371,7 +371,6 @@ export default class Designer extends LitElement {
         lx += 1;
         ly += 1;
       }
-
       if (
         element.localName === 'Text' &&
         element.parentElement?.tagName === 'IED'
@@ -428,28 +427,66 @@ export default class Designer extends LitElement {
       });
     }
 
-    let iedTexts: Element | Element[] | null = null;
+    const iedTexts: Map<Element, Element> = new Map();
 
-    if (element.localName === 'IEDName' && element.namespaceURI === sldNs) {
-      iedTexts = this.doc.querySelector(
+    if (element.localName === 'IEDName') {
+      const existingText = this.doc.querySelector(
         `:root > IED[name="${element.getAttributeNS(sldNs, 'name')}"] > Text`
       );
+      if (existingText) iedTexts.set(existingText, element);
     } else if (
       ['VoltageLevel', 'Bay'].includes(element.tagName) &&
       element.getElementsByTagNameNS(sldNs, 'IEDName').length
     ) {
-      iedTexts = Array.from(
-        this.doc.querySelectorAll(':root > IED > Text')
-      ).filter(e =>
-        Array.from(element.getElementsByTagNameNS(sldNs, 'IEDName'))
-          .filter(linkedIed => linkedIed.parentElement?.tagName === 'Private')
-          .map(iedName => iedName.getAttributeNS(sldNs, 'name'))
-          .includes(e.parentElement!.getAttribute('name'))
+      Array.from(element.getElementsByTagNameNS(sldNs, 'IEDName')).forEach(
+        iedName => {
+          const name = iedName.getAttributeNS(sldNs, 'name');
+          const existingText = this.doc.querySelector(
+            `:root > IED[name="${name}"] > Text`
+          );
+          if (existingText) iedTexts.set(existingText, iedName);
+        }
       );
     }
 
+    if (iedTexts)
+      Array.from(iedTexts.keys()).forEach(iedText => {
+        const candidates = iedText
+          .parentElement!.querySelector(
+            ':scope > Private[type="OpenSCD-Coords"]'
+          )
+          ?.getElementsByTagNameNS(sldNs, 'Coords');
+        if (candidates && candidates.length > 0) return;
+
+        const newCoord = this.doc.createElementNS(sldNs, `${this.nsp}:Coords`);
+
+        const textX =
+          parseFloat(iedTexts.get(iedText)!.getAttributeNS(sldNs, 'lx')!) - 1;
+        const textY =
+          parseFloat(iedTexts.get(iedText)!.getAttributeNS(sldNs, 'ly')!) - 1;
+
+        newCoord.setAttributeNS(sldNs, `${this.nsp}:lx`, textX.toString());
+        newCoord.setAttributeNS(sldNs, `${this.nsp}:ly`, textY.toString());
+
+        const sclPrivate = this.doc.createElementNS(
+          this.doc.documentElement.namespaceURI,
+          'Private'
+        );
+        sclPrivate.setAttribute('type', 'OpenSCD-Coords');
+        sclPrivate.appendChild(newCoord);
+        const sclIed = iedText.parentElement!;
+        // TODO: Should also be squashed into into other placing event
+        this.dispatchEvent(
+          newEditEvent({
+            node: sclPrivate,
+            parent: sclIed,
+            reference: getReference(sclIed, 'Private'),
+          })
+        );
+      });
+
     Array.from(element.querySelectorAll('Text'))
-      .concat(iedTexts ?? [])
+      .concat(Array.from(iedTexts.keys()))
       .forEach(text => {
         const coordElement = pPos(text)!;
 
