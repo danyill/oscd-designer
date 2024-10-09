@@ -2215,9 +2215,32 @@ export class SLDEditor extends LitElement {
       element.getAttribute('name') || element.getAttributeNS(sldNs, 'name');
     let weight = 400;
     let color = 'black';
-    const [x, y] = this.renderedLabelPosition(element, { preview });
+    let [x, y] = this.renderedLabelPosition(element, { preview });
 
     if (element.tagName === 'Text') {
+      // Text element has no coordinates - place above IED
+      // this performs very poorly
+      if (element.parentElement?.tagName === 'IED' && x === 0 && y === 0) {
+        const iedName = Array.from(
+          this.doc.querySelectorAll(':root > Substation')
+        )
+          .flatMap(substation =>
+            Array.from(substation.getElementsByTagNameNS(sldNs, 'IEDName'))
+          )
+          .find(
+            tIedName =>
+              tIedName.getAttributeNS(sldNs, 'name') ===
+              element.parentElement!.getAttribute('name')
+          );
+        if (iedName) {
+          // const [lx, ly] = ['lx', 'ly'].map(name =>
+          //   parseFloat(iedName.getAttributeNS(sldNs, name) ?? '0')
+          // );
+          x = parseFloat(iedName.getAttributeNS(sldNs, 'lx') ?? '0');
+          y = parseFloat(iedName.getAttributeNS(sldNs, 'ly') ?? '0') - 1;
+        }
+      }
+
       ({ weight, color } = attributes(pPos(element)!));
       deg = attributes(pPos(element)!).rot * 90;
       if (element.textContent)
