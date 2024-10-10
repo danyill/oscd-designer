@@ -680,7 +680,7 @@ export default class Designer extends LitElement {
         privateElement.setAttribute('type', 'OpenSCD-Linked-IEDs');
       }
 
-      privateElement.appendChild(element.cloneNode());
+      privateElement.appendChild(element);
 
       const enclosingEdits = [
         {
@@ -690,7 +690,6 @@ export default class Designer extends LitElement {
             ? getReference(element.parentElement!, 'Private')
             : null,
         },
-        { node: element },
       ];
 
       // TODO: In next API release, dispatch with "squash" to support undo/redo
