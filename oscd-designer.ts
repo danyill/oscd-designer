@@ -680,7 +680,7 @@ export default class Designer extends LitElement {
         privateElement.setAttribute('type', 'OpenSCD-Linked-IEDs');
       }
 
-      privateElement.appendChild(element);
+      privateElement.appendChild(element.cloneNode());
 
       const enclosingEdits = [
         {
@@ -689,6 +689,9 @@ export default class Designer extends LitElement {
           reference: element.parentElement
             ? getReference(element.parentElement!, 'Private')
             : null,
+        },
+        {
+          node: element,
         },
       ];
 
