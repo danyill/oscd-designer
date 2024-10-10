@@ -2259,7 +2259,9 @@ export class SLDEditor extends LitElement {
                 this.dispatchEvent(newEditWizardEvent(element));
               } else {
                 const iedName = element.getAttributeNS(sldNs, 'name');
-                const ied = this.doc.querySelector(`IED[name="${iedName}"]`);
+                const ied = this.doc.querySelector(
+                  `:root > IED[name="${iedName}"]`
+                );
                 if (ied) this.dispatchEvent(newEditWizardEvent(ied));
               }
               e.preventDefault();
@@ -3113,7 +3115,7 @@ export class SLDEditor extends LitElement {
 
     const clickthrough = !this.idle && this.placing !== linkedIed;
 
-    const text = sclIed.querySelector('Text');
+    const text = sclIed.querySelector(':scope > Text');
 
     return svg`<g class="${classMap({
       ied: true,

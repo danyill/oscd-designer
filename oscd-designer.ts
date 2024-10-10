@@ -859,8 +859,8 @@ export default class Designer extends LitElement {
     if (!this.doc) return html`<p>Please open an SCL document</p>`;
 
     const linkedIeds = Array.from(
-      this.doc.getElementsByTagNameNS(sldNs, 'IEDName') ?? []
-    );
+      this.doc.querySelectorAll(':root > Substation')
+    ).flatMap(sub => Array.from(sub.getElementsByTagNameNS(sldNs, 'IEDName')));
 
     return html`<main>
       <nav class="equipment">
