@@ -44,7 +44,6 @@ import {
 import {
   attributes,
   connectionStartPoints,
-  contains,
   elementPath,
   isBusBar,
   isEqType,
@@ -60,11 +59,8 @@ import {
   newStartResizeBREvent,
   newStartResizeTLEvent,
   Point,
-  pPos,
   prettyPrint,
   privType,
-  Rect,
-  removeIedTextCoords,
   removeNode,
   removeTerminal,
   ringedEqTypes,
@@ -97,6 +93,12 @@ function newEditWizardEvent(element: Element): CustomEvent<EditWizardDetial> {
 }
 
 type MenuItem = { handler?: () => void; content: TemplateResult };
+
+type Rect = [number, number, number, number];
+
+function contains([x1, y1, w1, h1]: Rect, [x2, y2, w2, h2]: Rect) {
+  return x1 <= x2 && y1 <= y2 && x1 + w1 >= x2 + w2 && y1 + h1 >= y2 + h2;
+}
 
 function overlaps([x1, y1, w1, h1]: Rect, [x2, y2, w2, h2]: Rect) {
   if (x1 >= x2 + w2 || x2 >= x1 + w1) return false;
@@ -562,20 +564,10 @@ export class SLDEditor extends LitElement {
     return true;
   }
 
-  renderedLabelPosition(
-    element: Element,
-    { preview = false },
-    coords: Point | null = null
-  ): Point {
+  renderedLabelPosition(element: Element, { preview = false }): Point {
     let {
       label: [x, y],
-    } = attributes(pPos(element)!);
-
-    // It might be nicer if we had a way to say "not on the canvas"
-    const hasNoCoordinates = x === 0 && y === 0 && coords;
-    if (hasNoCoordinates) {
-      [x, y] = coords;
-    }
+    } = attributes(element)!;
 
     // offset IED labels to right adjacent of symbol during placing
     const [offsetX, offsetY] =
@@ -586,33 +578,18 @@ export class SLDEditor extends LitElement {
         ? [-1, -1]
         : this.placingOffset;
 
-    // Text elements within the IED need more complex handling as they are not
-    // hierarchially contained.
-    //
-    // * If placing a Text element for an IED we must check it corresponds
-    //   to the placed IEDName
-    // * If placing a bay or voltage level we must check the IEDName is contained
-    //   before we move the Text element
-    //
     if (
       this.placing &&
       (element.closest(this.placing.localName) === this.placing ||
         (this.placing?.localName === 'IEDName' &&
           element.parentElement?.getAttribute('name') ===
-            this.placing.getAttributeNS(sldNs, 'name')) ||
-        (['VoltageLevel', 'Bay'].includes(this.placing.tagName) &&
-          element.tagName === 'Text' &&
-          element.parentElement?.tagName === 'IED' &&
-          Array.from(this.placing.getElementsByTagNameNS(sldNs, 'IEDName'))
-            .map(iedName => iedName.getAttributeNS(sldNs, 'name'))
-            .includes(element.parentElement?.getAttribute('name'))))
+            this.placing.getAttributeNS(sldNs, 'name')))
     ) {
       const {
         pos: [parentX, parentY],
-      } = attributes(pPos(this.placing));
-      // if coordinates are passed from parent, no additional offset required
-      x += hasNoCoordinates ? 0 : this.mouseX - parentX - offsetX;
-      y += hasNoCoordinates ? 0 : this.mouseY - parentY - offsetY;
+      } = attributes(this.placing);
+      x += this.mouseX - parentX - offsetX;
+      y += this.mouseY - parentY - offsetY;
     }
     if (this.placingLabel === element) {
       x = this.mouseX2 - 0.5 - offsetX;
@@ -798,72 +775,26 @@ export class SLDEditor extends LitElement {
   }
 
   addTextTo(element: Element) {
-    if (element.localName === 'IEDName') {
-      const {
-        pos: [x, y],
-      } = attributes(element);
-
-      const newCoord = this.doc.createElementNS(sldNs, `${this.nsp}:Coords`);
-      newCoord.setAttributeNS(sldNs, `${this.nsp}:lx`, x.toString());
-      newCoord.setAttributeNS(
-        sldNs,
-        `${this.nsp}:ly`,
-        (y < 2 ? y + 1 : y - 1).toString()
-      );
-
-      const sclPrivate = this.doc.createElementNS(
-        this.doc.documentElement.namespaceURI,
-        'Private'
-      );
-      sclPrivate.setAttribute('type', 'OpenSCD-Coords');
-      sclPrivate.appendChild(newCoord);
-
-      const sclIed = this.doc.querySelector(
-        `IED[name="${element.getAttributeNS(sldNs, 'name')}"]`
-      )!;
-
-      const text = this.doc.createElementNS(
-        this.doc.documentElement.namespaceURI,
-        'Text'
-      );
-
-      if (sclIed)
-        this.dispatchEvent(
-          newEditEvent([
-            {
-              node: text,
-              parent: sclIed,
-              reference: getReference(sclIed, 'Text'),
-            },
-            {
-              node: sclPrivate,
-              parent: sclIed,
-              reference: getReference(sclIed, 'Private'),
-            },
-          ])
-        );
-    } else {
-      const {
-        pos: [x, y],
-      } = attributes(element);
-      const text = this.doc.createElementNS(
-        this.doc.documentElement.namespaceURI,
-        'Text'
-      );
-      text.setAttributeNS(sldNs, `${this.nsp}:lx`, x.toString());
-      text.setAttributeNS(
-        sldNs,
-        `${this.nsp}:ly`,
-        (y < 2 ? y + 1 : y - 1).toString()
-      );
-      this.dispatchEvent(
-        newEditEvent({
-          node: text,
-          parent: element,
-          reference: getReference(element, 'Text'),
-        })
-      );
-    }
+    const {
+      pos: [x, y],
+    } = attributes(element);
+    const text = this.doc.createElementNS(
+      this.doc.documentElement.namespaceURI,
+      'Text'
+    );
+    text.setAttributeNS(sldNs, `${this.nsp}:lx`, x.toString());
+    text.setAttributeNS(
+      sldNs,
+      `${this.nsp}:ly`,
+      (y < 2 ? y + 1 : y - 1).toString()
+    );
+    this.dispatchEvent(
+      newEditEvent({
+        node: text,
+        parent: element,
+        reference: getReference(element, 'Text'),
+      })
+    );
   }
 
   transformerWindingMenuItems(winding: Element) {
@@ -955,7 +886,6 @@ export class SLDEditor extends LitElement {
   iedMenuItems(linkedIed: Element) {
     const name = linkedIed.getAttributeNS(sldNs, 'name');
     const sclIed = this.doc.querySelector(`IED[name="${name}"]`)!;
-    const textElement = sclIed?.querySelector(':scope > Text');
     const items: MenuItem[] = [
       {
         content: html`<mwc-list-item graphic="icon">
@@ -979,40 +909,21 @@ export class SLDEditor extends LitElement {
         </mwc-list-item>`,
         handler: () => this.dispatchEvent(newStartPlaceLabelEvent(linkedIed)),
       },
-      textElement
-        ? {
-            content: html`<mwc-list-item graphic="icon">
-              <span>Remove Text</span>
-              <mwc-icon slot="graphic">format_strikethrough</mwc-icon>
-            </mwc-list-item>`,
-            handler: () =>
-              this.dispatchEvent(newEditEvent({ node: textElement })),
-          }
-        : {
-            content: html`<mwc-list-item graphic="icon">
-              <span>Add Text</span>
-              <mwc-icon slot="graphic">title</mwc-icon>
-            </mwc-list-item>`,
-            handler: () => this.addTextTo(linkedIed),
+      {
+        ...(sclIed && {
+          content: html`<mwc-list-item
+            graphic="icon"
+            style="--mdc-theme-text-primary-on-background: #BB1326; --mdc-theme-text-icon-on-background: #BB1326;"
+          >
+            <span>Delete IED</span>
+            <mwc-icon slot="graphic">delete</mwc-icon>
+          </mwc-list-item>`,
+          handler: () => {
+            const edits: Edit[] = [];
+            edits.push([removeIED({ node: sclIed }), { node: linkedIed }]);
+            this.dispatchEvent(newEditEvent(edits));
           },
-
-      {
-        content: html`<mwc-list-item graphic="icon">
-          <span>Edit</span>
-          <mwc-icon slot="graphic">edit</mwc-icon>
-        </mwc-list-item>`,
-        handler: () => this.dispatchEvent(newEditWizardEvent(sclIed)),
-      },
-      {
-        content: html`<mwc-list-item graphic="icon">
-          <span>Delete</span>
-          <mwc-icon slot="graphic">delete</mwc-icon>
-        </mwc-list-item>`,
-        handler: () => {
-          const edits: Edit[] = [];
-          edits.push([removeIED({ node: sclIed }), { node: linkedIed }]);
-          this.dispatchEvent(newEditEvent(edits));
-        },
+        }),
       },
       {
         content: html`<mwc-list-item graphic="icon">
@@ -1021,17 +932,6 @@ export class SLDEditor extends LitElement {
         </mwc-list-item>`,
         handler: () => {
           const edits: Edit[] = [{ node: linkedIed }];
-
-          const coords = Array.from(
-            sclIed.getElementsByTagNameNS(sldNs, 'Coords')
-          ).map(coord => ({ node: coord.parentElement! }));
-          if (coords) edits.push(coords);
-
-          const textCoordinates = sclIed.querySelector(
-            ':scope > Private[type="OpenSCD-Coords"]'
-          );
-          if (textCoordinates) edits.push({ node: textCoordinates });
-
           this.dispatchEvent(newEditEvent(edits));
         },
       },
@@ -1515,9 +1415,7 @@ export class SLDEditor extends LitElement {
             if (cNode && cNode.closest(bayOrVL.tagName) !== bayOrVL)
               edits.push(...removeNode(cNode));
           });
-
           edits.push({ node: bayOrVL });
-          edits.push(removeIedTextCoords(bayOrVL));
           this.dispatchEvent(newEditEvent(edits));
         },
       },
@@ -1526,14 +1424,7 @@ export class SLDEditor extends LitElement {
   }
 
   textMenuItems(text: Element) {
-    let textNsEl;
-    if (text.parentElement?.tagName === 'IED') {
-      textNsEl = pPos(text);
-    } else {
-      textNsEl = text;
-    }
-
-    const { weight, color } = attributes(textNsEl!);
+    const { weight, color } = attributes(text);
     const items: MenuItem[] = [
       {
         content: html`<mwc-list-item graphic="icon">
@@ -1586,7 +1477,7 @@ export class SLDEditor extends LitElement {
         handler: () => {
           this.dispatchEvent(
             newEditEvent({
-              element: pPos(text)!,
+              element: text,
               attributes: {
                 [`${this.nsp}:weight`]: { namespaceURI: sldNs, value: '500' },
               },
@@ -1604,7 +1495,7 @@ export class SLDEditor extends LitElement {
         handler: () => {
           this.dispatchEvent(
             newEditEvent({
-              element: pPos(text)!,
+              element: text,
               attributes: {
                 [`${this.nsp}:weight`]: { namespaceURI: sldNs, value: null },
               },
@@ -1625,7 +1516,7 @@ export class SLDEditor extends LitElement {
         handler: () => {
           this.dispatchEvent(
             newEditEvent({
-              element: pPos(text)!,
+              element: text,
               attributes: {
                 [`${this.nsp}:color`]: {
                   namespaceURI: sldNs,
@@ -1649,7 +1540,7 @@ export class SLDEditor extends LitElement {
         handler: () => {
           this.dispatchEvent(
             newEditEvent({
-              element: pPos(text)!,
+              element: text,
               attributes: {
                 [`${this.nsp}:color`]: {
                   namespaceURI: sldNs,
@@ -1670,7 +1561,7 @@ export class SLDEditor extends LitElement {
         handler: () => {
           this.dispatchEvent(
             newEditEvent({
-              element: pPos(text)!,
+              element: text,
               attributes: {
                 [`${this.nsp}:color`]: {
                   namespaceURI: sldNs,
@@ -1964,14 +1855,8 @@ export class SLDEditor extends LitElement {
         <mwc-icon-button
           label="Delete Substation"
           title="Delete Substation"
-          @click=${() => {
-            this.dispatchEvent(
-              newEditEvent([
-                { node: this.substation },
-                removeIedTextCoords(this.substation),
-              ])
-            );
-          }}
+          @click=${() =>
+            this.dispatchEvent(newEditEvent({ node: this.substation }))}
           icon="delete"
         >
         </mwc-icon-button>
@@ -2187,11 +2072,7 @@ export class SLDEditor extends LitElement {
     </section>`;
   }
 
-  renderLabel(
-    element: Element,
-    { preview = false } = {},
-    coords: Point | null = null
-  ) {
+  renderLabel(element: Element, { preview = false } = {}) {
     if (!this.showLabels) return nothing;
 
     let deg = 0;
@@ -2199,11 +2080,11 @@ export class SLDEditor extends LitElement {
       element.getAttribute('name') || element.getAttributeNS(sldNs, 'name');
     let weight = 400;
     let color = 'black';
-    const [x, y] = this.renderedLabelPosition(element, { preview }, coords);
+    const [x, y] = this.renderedLabelPosition(element, { preview });
 
     if (element.tagName === 'Text') {
-      ({ weight, color } = attributes(pPos(element)!));
-      deg = attributes(pPos(element)!).rot * 90;
+      ({ weight, color } = attributes(element));
+      deg = attributes(element).rot * 90;
       if (element.textContent)
         text = element.textContent?.split(/\r?\n/).map(
           (line, i) =>
@@ -2229,17 +2110,11 @@ export class SLDEditor extends LitElement {
       handleClick = () =>
         this.dispatchEvent(newStartPlaceLabelEvent(element, offset));
     }
-    let id: string | typeof nothing;
-    if (
+    const id =
       element.closest('Substation') === this.substation &&
       element.tagName !== 'Text'
-    ) {
-      id = `${identity(element)}`;
-    } else if (element.localName === 'IEDName') {
-      id = `label-${element.getAttributeNS(sldNs, 'name')}`;
-    } else {
-      id = nothing;
-    }
+        ? identity(element)
+        : nothing;
 
     const classes = classMap({
       label: true,
@@ -3075,14 +2950,6 @@ export class SLDEditor extends LitElement {
     if (!this.showIeds || (this.placing === linkedIed && !preview))
       return svg``;
 
-    const sclIed = this.doc.querySelector(
-      `:root > IED[name="${
-        linkedIed.getAttributeNS(sldNs, 'name') ?? 'Unknown IED'
-      }"`
-    );
-
-    if (!sclIed) return svg``;
-
     const [x, y] = this.renderedPosition(linkedIed);
 
     let handleClick = () => {
@@ -3115,8 +2982,6 @@ export class SLDEditor extends LitElement {
 
     const clickthrough = !this.idle && this.placing !== linkedIed;
 
-    const text = sclIed.querySelector(':scope > Text');
-
     return svg`<g class="${classMap({
       ied: true,
       preview: this.placing === linkedIed,
@@ -3146,7 +3011,6 @@ export class SLDEditor extends LitElement {
     </g>
     <g class="${classMap({ preview })}">${[
       this.renderLabel(linkedIed, { preview }),
-      text ? this.renderLabel(text!, { preview }, [x, y]) : nothing,
     ]}</g>`;
   }
 

@@ -1,4 +1,4 @@
-import { Edit, Remove } from '@openscd/open-scd-core';
+import { Edit } from '@openscd/open-scd-core';
 import { getReference } from '@openscd/oscd-scl';
 
 export const privType = 'Transpower-SLD-Vertices';
@@ -58,7 +58,6 @@ export function uuid() {
 
 const transformerKinds = ['default', 'auto', 'earthing'] as const;
 export type Point = [number, number];
-export type Rect = [number, number, number, number];
 
 export type TransformerKind = (typeof transformerKinds)[number];
 export type Attrs = {
@@ -116,16 +115,6 @@ export function attributes(element: Element): Attrs {
   return { pos, dim, label, flip, rot, bus, weight, color, kind };
 }
 
-export function pPos(element: Element): Element {
-  if (element.parentElement?.tagName !== 'IED') return element;
-  const candidates = element.parentElement
-    .querySelector(':scope > Private[type="OpenSCD-Coords"]')
-    ?.getElementsByTagNameNS(sldNs, 'Coords');
-  if (candidates && candidates.length > 0) return candidates[0];
-  // TODO: How best to handle a missing text element? Can this ever happen?
-  return element;
-}
-
 function pathString(...args: string[]) {
   return args.join('/');
 }
@@ -174,24 +163,6 @@ export function removeNode(node: Element): Edit[] {
   ).forEach(terminal => edits.push({ node: terminal }));
 
   return edits;
-}
-
-export function removeIedTextCoords(element: Element): Remove[] {
-  const iedNames = Array.from(
-    element.getElementsByTagNameNS(sldNs, 'IEDName')
-  ).map(iedName => iedName.getAttributeNS(sldNs, 'name'));
-
-  return Array.from(
-    element.ownerDocument.querySelectorAll(
-      ':root > IED > Private[type="OpenSCD-Coords"]'
-    )
-  )
-    .filter(sclPrivate =>
-      iedNames.includes(
-        sclPrivate.parentElement!.parentElement!.getAttribute('name')
-      )
-    )
-    .map(coords => ({ node: coords }));
 }
 
 function reverseSection(section: Element): Edit[] {
@@ -465,10 +436,6 @@ export function connectionStartPoints(equipment: Element): {
   ] as [Point, Point];
 
   return { T1, T2 };
-}
-
-export function contains([x1, y1, w1, h1]: Rect, [x2, y2, w2, h2]: Rect) {
-  return x1 <= x2 && y1 <= y2 && x1 + w1 >= x2 + w2 && y1 + h1 >= y2 + h2;
 }
 
 export type ResizeDetail = {

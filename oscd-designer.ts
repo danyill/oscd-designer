@@ -30,7 +30,6 @@ import {
   elementPath,
   eqTypes,
   isBusBar,
-  pPos,
   PlaceEvent,
   PlaceLabelEvent,
   Point,
@@ -291,10 +290,10 @@ export default class Designer extends LitElement {
   }
 
   rotateElement(element: Element) {
-    const { rot } = attributes(pPos(element)!);
+    const { rot } = attributes(element)!;
     const edits = [
       {
-        element: pPos(element)!,
+        element,
         attributes: {
           [`${this.nsp}:rot`]: {
             namespaceURI: sldNs,
@@ -317,7 +316,7 @@ export default class Designer extends LitElement {
   placeLabel(element: Element, x: number, y: number) {
     this.dispatchEvent(
       newEditEvent({
-        element: pPos(element)!,
+        element,
         attributes: {
           lx: { namespaceURI: sldNs, value: x.toString() },
           ly: { namespaceURI: sldNs, value: y.toString() },
@@ -328,7 +327,6 @@ export default class Designer extends LitElement {
   }
 
   placeElement(element: Element, parent: Element, x: number, y: number) {
-    let placingElement: Element | null = element;
     const edits: Edit[] = [];
     if (element.parentElement !== parent) {
       edits.push(...reparentElement(element, parent));
@@ -371,53 +369,9 @@ export default class Designer extends LitElement {
         lx += 1;
         ly += 1;
       }
-      if (
-        element.localName === 'Text' &&
-        element.parentElement?.tagName === 'IED'
-      ) {
-        placingElement = element.parentElement.querySelector(
-          'Private[type="OpenSCD-Coords"]'
-        );
-
-        // TODO: Abstract to function
-        if (!placingElement) {
-          // missing IED text coordinates
-          const newCoord = this.doc.createElementNS(
-            sldNs,
-            `${this.nsp}:Coords`
-          );
-          newCoord.setAttributeNS(sldNs, `${this.nsp}:lx`, x.toString());
-          newCoord.setAttributeNS(
-            sldNs,
-            `${this.nsp}:ly`,
-            (y < 2 ? y + 1 : y - 1).toString()
-          );
-
-          const sclPrivate = this.doc.createElementNS(
-            this.doc.documentElement.namespaceURI,
-            'Private'
-          );
-          sclPrivate.setAttribute('type', 'OpenSCD-Coords');
-          sclPrivate.appendChild(newCoord);
-
-          const sclIed = element.parentElement;
-          if (sclIed)
-            this.dispatchEvent(
-              newEditEvent({
-                node: sclPrivate,
-                parent: sclIed,
-                reference: getReference(sclIed, 'Private'),
-              })
-            );
-
-          placingElement = element.parentElement.querySelector(
-            'Private[type="OpenSCD-Coords"]'
-          )!;
-        }
-      }
 
       edits.push({
-        element: placingElement,
+        element,
         attributes: {
           x: { namespaceURI: sldNs, value: x.toString() },
           y: { namespaceURI: sldNs, value: y.toString() },
@@ -427,87 +381,25 @@ export default class Designer extends LitElement {
       });
     }
 
-    const iedTexts: Map<Element, Element> = new Map();
-
-    if (element.localName === 'IEDName') {
-      const existingText = this.doc.querySelector(
-        `:root > IED[name="${element.getAttributeNS(sldNs, 'name')}"] > Text`
-      );
-      if (existingText) iedTexts.set(existingText, element);
-    } else if (
-      ['VoltageLevel', 'Bay'].includes(element.tagName) &&
-      element.getElementsByTagNameNS(sldNs, 'IEDName').length
-    ) {
-      Array.from(element.getElementsByTagNameNS(sldNs, 'IEDName')).forEach(
-        iedName => {
-          const name = iedName.getAttributeNS(sldNs, 'name');
-          const existingText = this.doc.querySelector(
-            `:root > IED[name="${name}"] > Text`
-          );
-          if (existingText) iedTexts.set(existingText, iedName);
-        }
-      );
-    }
-
-    if (iedTexts)
-      Array.from(iedTexts.keys()).forEach(iedText => {
-        const candidates = iedText
-          .parentElement!.querySelector(
-            ':scope > Private[type="OpenSCD-Coords"]'
-          )
-          ?.getElementsByTagNameNS(sldNs, 'Coords');
-        if (candidates && candidates.length > 0) return;
-
-        const newCoord = this.doc.createElementNS(sldNs, `${this.nsp}:Coords`);
-
-        const textX =
-          parseFloat(iedTexts.get(iedText)!.getAttributeNS(sldNs, 'lx')!) - 1;
-        const textY =
-          parseFloat(iedTexts.get(iedText)!.getAttributeNS(sldNs, 'ly')!) - 1;
-
-        newCoord.setAttributeNS(sldNs, `${this.nsp}:lx`, textX.toString());
-        newCoord.setAttributeNS(sldNs, `${this.nsp}:ly`, textY.toString());
-
-        const sclPrivate = this.doc.createElementNS(
-          this.doc.documentElement.namespaceURI,
-          'Private'
-        );
-        sclPrivate.setAttribute('type', 'OpenSCD-Coords');
-        sclPrivate.appendChild(newCoord);
-        const sclIed = iedText.parentElement!;
-        // TODO: Should also be squashed into into other placing event
-        this.dispatchEvent(
-          newEditEvent({
-            node: sclPrivate,
-            parent: sclIed,
-            reference: getReference(sclIed, 'Private'),
-          })
-        );
+    Array.from(element.querySelectorAll('Text')).forEach(text => {
+      const {
+        label: [textLX, textLY],
+      } = attributes(text);
+      const newAttributes = {
+        lx: {
+          namespaceURI: sldNs,
+          value: (textLX + dx).toString(),
+        },
+        ly: {
+          namespaceURI: sldNs,
+          value: (textLY + dy).toString(),
+        },
+      };
+      edits.push({
+        element: text,
+        attributes: newAttributes,
       });
-
-    Array.from(element.querySelectorAll('Text'))
-      .concat(Array.from(iedTexts.keys()))
-      .forEach(text => {
-        const coordElement = pPos(text)!;
-
-        const {
-          label: [textLX, textLY],
-        } = attributes(pPos(text)!);
-        const newAttributes = {
-          lx: {
-            namespaceURI: sldNs,
-            value: (textLX + dx).toString(),
-          },
-          ly: {
-            namespaceURI: sldNs,
-            value: (textLY + dy).toString(),
-          },
-        };
-        edits.push({
-          element: coordElement,
-          attributes: newAttributes,
-        });
-      });
+    });
 
     Array.from(
       element.querySelectorAll(
@@ -860,9 +752,19 @@ export default class Designer extends LitElement {
   render() {
     if (!this.doc) return html`<p>Please open an SCL document</p>`;
 
+    const ieds = Array.from(this.doc.querySelectorAll(':root > IED'));
+
     const linkedIeds = Array.from(
       this.doc.querySelectorAll(':root > Substation')
     ).flatMap(sub => Array.from(sub.getElementsByTagNameNS(sldNs, 'IEDName')));
+
+    const unmatchedLinkedIeds = linkedIeds.filter(
+      linkedIed =>
+        !ieds.find(
+          ied =>
+            ied.getAttribute('name') === linkedIed.getAttributeNS(sldNs, 'name')
+        )
+    ).length;
 
     return html`<main>
       <nav class="equipment">
@@ -933,7 +835,7 @@ export default class Designer extends LitElement {
             >
               ${voltageLevelIcon}
             </mwc-fab>
-            ${this.doc.querySelector(':root > IED')
+            ${ieds.length > 0 || unmatchedLinkedIeds > 0
               ? html`<mwc-fab
                     mini
                     icon="developer_board"
@@ -958,13 +860,47 @@ export default class Designer extends LitElement {
                       const name = selectedListItem.dataset.name!;
                       selectedListItem.selected = false;
 
-                      const element = this.insertOrGetIed(name, this.doc);
-                      this.iedMenu!.close();
+                      if (name === 'Delete Unmatched') {
+                        const edits: Edit[] = [];
+                        linkedIeds
+                          .filter(
+                            linkedIed =>
+                              !ieds.find(
+                                ied =>
+                                  ied.getAttribute('name') ===
+                                  linkedIed.getAttributeNS(sldNs, 'name')
+                              )
+                          )
+                          .forEach(unusedLinkedIed => {
+                            edits.push({ node: unusedLinkedIed });
+                          });
+                        this.dispatchEvent(newEditEvent(edits));
+                        // TODO: Without a lot of dispatching not easy to tell if the parent Private element is now empty
+                        // Once we can squash we could improve this a bit
+                      } else {
+                        const element = this.insertOrGetIed(name, this.doc);
+                        this.iedMenu!.close();
 
-                      this.startPlacing(element);
+                        this.startPlacing(element);
+                      }
                     }}
                   >
-                    ${Array.from(this.doc.querySelectorAll(':root > IED'))
+                    ${unmatchedLinkedIeds > 0
+                      ? html`<mwc-list-item
+                          style="--mdc-theme-text-primary-on-background: #BB1326; --mdc-theme-text-icon-on-background: #BB1326;"
+                          graphic="control"
+                          hasMeta
+                          data-name="Delete Unmatched"
+                        >
+                          <span
+                            >Remove ${unmatchedLinkedIeds} missing
+                            IED${unmatchedLinkedIeds > 1 ? 's' : ''} from
+                            SLD</span
+                          >
+                          <mwc-icon slot="graphic">delete</mwc-icon>
+                        </mwc-list-item>`
+                      : nothing}
+                    ${Array.from(ieds)
                       .sort((a, b) => {
                         const aName = a.getAttribute('name')!;
                         const bName = b.getAttribute('name')!;
@@ -1181,7 +1117,7 @@ export default class Designer extends LitElement {
             : nothing
         }
         ${
-          this.doc.querySelector(':root > IED') &&
+          (ieds.length > 0 || unmatchedLinkedIeds > 0) &&
           this.doc.querySelector(':root > Substation')
             ? html`<mwc-icon-button-toggle
                 id="ieds"
