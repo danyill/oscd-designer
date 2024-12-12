@@ -4,7 +4,7 @@ import { css, html, nothing, LitElement, svg, } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { createRef, ref } from 'lit/directives/ref.js';
-import { newEditEvent } from '@openscd/open-scd-core';
+import { isUpdate, newEditEvent, } from '@openscd/open-scd-core';
 import '@material/mwc-dialog';
 import '@material/mwc-list';
 import '@material/mwc-list/mwc-list-item.js';
@@ -237,8 +237,15 @@ function renderMenuHeader(element) {
   </mwc-list-item>`;
 }
 let SLDEditor = class SLDEditor extends LitElement {
+    get idle() {
+        return !(this.placing ||
+            this.resizingBR ||
+            this.resizingTL ||
+            this.placingLabel ||
+            this.connecting);
+    }
     constructor() {
-        super(...arguments);
+        super();
         this.editCount = -1;
         this.gridSize = 32;
         this.nsp = 'esld';
@@ -250,6 +257,7 @@ let SLDEditor = class SLDEditor extends LitElement {
         this.mouseX2f = 0;
         this.mouseY2f = 0;
         this.coordinatesRef = createRef();
+        this.iedModifiedName = undefined;
         this.handleKeydown = ({ key }) => {
             if (key === 'Escape')
                 this.menu = undefined;
@@ -263,13 +271,38 @@ let SLDEditor = class SLDEditor extends LitElement {
                 this.menu = undefined;
             }
         };
-    }
-    get idle() {
-        return !(this.placing ||
-            this.resizingBR ||
-            this.resizingTL ||
-            this.placingLabel ||
-            this.connecting);
+        // ensure if IEDs are renamed in wizard we update IED name
+        // first retrieve the name before the change
+        window.addEventListener('oscd-edit', event => {
+            const edit = event.detail;
+            if (isUpdate(edit) &&
+                edit.element.tagName === 'IED' &&
+                edit.attributes.name &&
+                typeof edit.attributes.name === 'string')
+                this.iedModifiedName = edit.element.getAttribute('name');
+        }, { capture: true });
+        // ensure if IEDs are renamed in wizard we update IED name
+        // now change the corresponding IEDName element
+        window.addEventListener('oscd-edit', event => {
+            const edit = event.detail;
+            if (isUpdate(edit) &&
+                edit.element.tagName === 'IED' &&
+                edit.attributes.name &&
+                typeof edit.attributes.name === 'string') {
+                const newIedName = edit.attributes.name;
+                const iedNameToModify = Array.from(this.doc.getElementsByTagNameNS(sldNs, 'IEDName')).find(iedName => iedName.getAttributeNS(sldNs, 'name') === this.iedModifiedName);
+                if (!iedNameToModify)
+                    return;
+                const updateEdit = {
+                    element: iedNameToModify,
+                    attributes: {
+                        [`${this.nsp}:name`]: { namespaceURI: sldNs, value: newIedName },
+                    },
+                };
+                this.dispatchEvent(newEditEvent(updateEdit));
+                this.iedModifiedName = undefined;
+            }
+        });
     }
     positionCoordinates(e) {
         var _a;
